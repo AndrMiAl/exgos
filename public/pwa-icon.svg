@@ -1,0 +1,27 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#111827"/>
+  <circle cx="256" cy="230" r="190" fill="#2563EB" opacity="0.18"/>
+  <circle cx="256" cy="230" r="130" fill="#F59E0B" opacity="0.12"/>
+  <path d="M256 92V126" stroke="#93C5FD" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="256" cy="82" r="15" fill="#FBBF24"/>
+  <rect x="126" y="124" width="260" height="190" rx="48" fill="#E5E7EB"/>
+  <rect x="126" y="124" width="260" height="190" rx="48" stroke="#2563EB" stroke-width="10"/>
+  <rect x="158" y="158" width="196" height="112" rx="28" fill="#0F172A"/>
+  <circle cx="215" cy="212" r="18" fill="#38BDF8"/>
+  <circle cx="297" cy="212" r="18" fill="#38BDF8"/>
+  <circle cx="215" cy="212" r="30" fill="#38BDF8" opacity="0.16"/>
+  <circle cx="297" cy="212" r="30" fill="#38BDF8" opacity="0.16"/>
+  <path d="M217 244C238 262 275 262 296 244" stroke="#FBBF24" stroke-width="10" stroke-linecap="round"/>
+  <rect x="96" y="184" width="34" height="74" rx="16" fill="#2563EB"/>
+  <rect x="382" y="184" width="34" height="74" rx="16" fill="#2563EB"/>
+  <rect x="220" y="304" width="72" height="44" rx="14" fill="#9CA3AF"/>
+  <path d="M158 344C165 316 188 296 216 296H296C324 296 347 316 354 344L368 402H144L158 344Z" fill="#D1D5DB"/>
+  <path d="M158 344C165 316 188 296 216 296H296C324 296 347 316 354 344" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="256" cy="337" r="17" fill="#FBBF24"/>
+  <path d="M212 367H300" stroke="#9CA3AF" stroke-width="10" stroke-linecap="round"/>
+  <rect x="74" y="332" width="364" height="112" rx="30" fill="#0F172A" opacity="0.95"/>
+  <rect x="74" y="332" width="364" height="112" rx="30" stroke="#F59E0B" stroke-width="6"/>
+  <text x="256" y="381" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="900" letter-spacing="2" fill="#FFFFFF">ГОС</text>
+  <text x="256" y="423" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="900" letter-spacing="1.5" fill="#FBBF24">ТРЕНЕР</text>
+  <path d="M174 454H338" stroke="#2563EB" stroke-width="10" stroke-linecap="round"/>
+</svg>

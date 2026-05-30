@@ -1,0 +1,97 @@
+
+> gos-exam-trainer@0.1.0 dev
+> node scripts/dev.mjs
+
+API server listening on http://127.0.0.1:3001
+Data directory: C:\Users\Andrew\Downloads\gos-exam-trainer-main\gos-exam-trainer-main\server\data
+
+  [32m[1mVITE[22m v7.3.3[39m  [2mready in [0m[1m559[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://198.18.0.1:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.3:[1m5173[22m/[39m
+[2m16:31:48[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue, /src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m16:32:06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m16:47:23[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m16:47:34[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m16:47:44[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m16:51:10[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m16:54:59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m16:55:26[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m17:04:05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:04:57[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:05:02[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:06:23[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:06:31[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:06:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:27:24[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:27:53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:30:20[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:38:27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:38:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue, /src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m17:40:19[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:41:32[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:45:55[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:46:04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:46:16[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue, /src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m17:48:06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m17:54:45[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue, /src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m17:57:13[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue, /src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m17:57:41[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m18:18:43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:20:05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:20:37[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:29:27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:30:12[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:30:27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:31:04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m18:32:10[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m18:35:04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:36:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m18:36:56[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m18:37:41[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:37:52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:39:16[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:45:48[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:45:53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:46:19[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:46:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:46:55[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m18:48:05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:51:27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue, /src/views/PracticeView.vue, /src/views/DashboardView.vue, /src/views/MaterialsView.vue, /src/views/StatsView.vue, /src/views/LoginView.vue[22m
+[2m18:52:03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:52:46[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:53:43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m18:58:58[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue, /src/views/PracticeView.vue, /src/views/DashboardView.vue, /src/views/MaterialsView.vue, /src/views/StatsView.vue, /src/views/LoginView.vue[22m
+[2m18:59:08[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue, /src/views/PracticeView.vue, /src/views/DashboardView.vue, /src/views/MaterialsView.vue, /src/views/StatsView.vue, /src/views/LoginView.vue[22m
+[2m18:59:35[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m19:00:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m19:05:07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue, /src/views/PracticeView.vue, /src/views/DashboardView.vue, /src/views/MaterialsView.vue, /src/views/StatsView.vue, /src/views/LoginView.vue[22m
+[2m19:05:27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m19:05:59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m19:08:52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue, /src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:11:15[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[2m19:11:47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:12:08[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:12:16[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:12:25[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m19:14:48[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:15:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:16:25[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/StatsView.vue[22m
+[2m19:18:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[2m19:18:31[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:19:05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/main.ts[22m
+[2m19:21:24[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.vue[22m
+[2m19:21:40[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:21:52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:25:27[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:25:52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:26:15[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:26:25[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:26:36[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:32:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m19:32:47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue[22m
+[2m19:33:24[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
+[2m19:41:03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:41:33[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/base.css[22m
+[2m19:41:55[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PracticeView.vue?vue&type=style&index=0&scoped=65e09c75&lang.css[22m
