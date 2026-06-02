@@ -68,7 +68,7 @@ onBeforeUnmount(() => {
       <el-menu :default-active="activePath" router class="nav-menu">
         <el-menu-item index="/">
           <el-icon><House /></el-icon>
-          <span>Обзор</span>
+          <span>Главное меню</span>
         </el-menu-item>
         <el-menu-item index="/practice">
           <el-icon><EditPen /></el-icon>
@@ -122,7 +122,7 @@ onBeforeUnmount(() => {
     <nav class="mobile-tabbar" aria-label="Основная навигация">
       <RouterLink to="/" class="mobile-tab" :class="{ active: activePath === '/' }">
         <el-icon><House /></el-icon>
-        <span>Обзор</span>
+        <span>Меню</span>
       </RouterLink>
       <RouterLink to="/practice" class="mobile-tab" :class="{ active: activePath === '/practice' }">
         <el-icon><EditPen /></el-icon>

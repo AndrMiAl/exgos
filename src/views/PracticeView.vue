@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight, Finished, RefreshRight, Select } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Finished, House, RefreshRight, Select } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { MASTERED_CORRECT_ANSWERS, useExamStore } from '@/stores/exam'
@@ -20,6 +21,7 @@ import { getOptionDisplayText, getOptionSemanticKey } from '@/utils/questionOpti
 const authStore = useAuthStore()
 const examStore = useExamStore()
 const themeStore = useThemeStore()
+const router = useRouter()
 
 const selectedSectionId = ref<string | 'all'>('all')
 const selectedMode = ref<AnswerFeedbackMode>('immediate')
@@ -771,6 +773,10 @@ function goNext() {
   }
 }
 
+function goToMainMenu() {
+  void router.push('/')
+}
+
 const finishDialogTitle = computed(() => {
   if (isMemorizationAttempt.value) {
     return finishEarly.value ? 'Остановить заучивание' : 'Завершить заучивание'
@@ -1070,6 +1076,7 @@ function finishAttempt() {
         </div>
         <div class="toolbar-actions">
           <el-button class="mobile-early-finish" :icon="Finished" @click="openFinishDialog(true)">Завершить</el-button>
+          <el-button :icon="House" @click="goToMainMenu">В главное меню</el-button>
           <el-button :icon="RefreshRight" @click="restartAttempt">Начать заново</el-button>
         </div>
       </div>
@@ -1263,6 +1270,7 @@ function finishAttempt() {
           Назад
         </el-button>
         <el-button class="desktop-early-finish" :icon="Finished" @click="openFinishDialog(true)">Завершить досрочно</el-button>
+        <el-button :icon="House" @click="goToMainMenu">В главное меню</el-button>
         <div class="spacer" />
         <el-button
           v-if="workingAttempt.currentIndex < workingAttempt.questionIds.length - 1"
