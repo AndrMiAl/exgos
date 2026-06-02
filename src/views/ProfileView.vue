@@ -4,9 +4,11 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import { useAuthStore } from '@/stores/auth'
+import { useExamStore } from '@/stores/exam'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const examStore = useExamStore()
 const form = reactive({
   firstName: '',
   lastName: '',
@@ -36,6 +38,7 @@ async function saveProfile() {
 
 async function logout() {
   await authStore.logout()
+  await examStore.hydrate()
   router.push('/login')
 }
 </script>

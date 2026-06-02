@@ -48,6 +48,17 @@ function sampleQuestions<T>(items: T[], count: number) {
   return shuffleQuestions(items).slice(0, count)
 }
 
+function pickRandomItem<T>(items: T[]) {
+  return sampleQuestions(items, 1)[0] ?? null
+}
+
+function createAttemptQuestionEntry(question: ExamQuestion) {
+  return {
+    entryId: createId('attempt_question'),
+    questionId: question.id,
+  }
+}
+
 function buildAdaptiveQuestionSet(sectionPools: SectionQuestionPool[], limit = MAX_QUESTIONS_PER_TEST) {
   const selectedQuestions: ExamQuestion[] = []
   const prioritizedQuestionIds = new Set<string>()
@@ -230,8 +241,8 @@ export const useExamStore = defineStore('exam', {
         questionStatsByOwner: {},
       })
       this.attempts = saved.attempts
-      this.questionStatsByOwner = saved.questionStatsByOwner ?? {
-        guest: saved.questionStats ?? {},
+      this.questionStatsByOwner = {
+        guest: saved.questionStatsByOwner?.guest ?? saved.questionStats ?? {},
       }
     },
     persist() {
@@ -255,11 +266,73 @@ export const useExamStore = defineStore('exam', {
 
       saveJson<ExamProgressState>(EXAM_STORAGE_KEY, {
         attempts: this.attempts.filter((attempt) => attempt.ownerId === 'guest'),
-        questionStatsByOwner: this.questionStatsByOwner,
+        questionStatsByOwner: {
+          guest: this.questionStatsByOwner.guest ?? {},
+        },
       })
     },
     getQuestionStats(ownerId: string) {
       return this.questionStatsByOwner[ownerId] ?? {}
+    },
+    resolveAttemptQuestionId(attempt: TestAttempt, questionEntryId: string) {
+      return attempt.questionRefsByEntryId?.[questionEntryId] ?? questionEntryId
+    },
+    questionByAttemptEntry(attempt: TestAttempt, questionEntryId: string) {
+      return this.questionById(this.resolveAttemptQuestionId(attempt, questionEntryId))
+    },
+    pickMemorizationQuestion(ownerId: string, sectionId: string | 'all') {
+      const availableQuestions = this.getQuestionsForSection(sectionId, {
+        ownerId,
+        includeMastered: false,
+      })
+
+      return pickRandomItem(availableQuestions)
+    },
+    appendQuestionToAttempt(attempt: TestAttempt, question: ExamQuestion) {
+      const isMemorizationMode = attempt.selectionMode === 'memorize'
+      const questionEntryId = isMemorizationMode ? createAttemptQuestionEntry(question).entryId : question.id
+
+      if (isMemorizationMode) {
+        attempt.questionRefsByEntryId = {
+          ...(attempt.questionRefsByEntryId ?? {}),
+          [questionEntryId]: question.id,
+        }
+      }
+
+      attempt.questionIds.push(questionEntryId)
+      attempt.optionOrderByQuestionId = {
+        ...(attempt.optionOrderByQuestionId ?? {}),
+        [questionEntryId]: getOptionIdsForDifficulty(question, attempt.difficulty ?? 'hard'),
+      }
+
+      return questionEntryId
+    },
+    recordAttemptAnswerStat(attempt: TestAttempt, question: ExamQuestion, answer: AttemptAnswer) {
+      if (answer.statsRecordedAt) {
+        return
+      }
+
+      const recordedAt = answer.checkedAt ?? answer.answeredAt
+      this.recordQuestionStat(attempt.ownerId, question, answer, attempt.difficulty ?? 'hard')
+      answer.statsRecordedAt = recordedAt
+      attempt.statsRecordedAt ??= recordedAt
+    },
+    extendMemorizationAttempt(attempt: TestAttempt) {
+      if (attempt.selectionMode !== 'memorize' || attempt.status !== 'active') {
+        return
+      }
+
+      if (attempt.currentIndex < attempt.questionIds.length - 1) {
+        return
+      }
+
+      const nextQuestion = this.pickMemorizationQuestion(attempt.ownerId, attempt.sectionId)
+
+      if (!nextQuestion) {
+        return
+      }
+
+      this.appendQuestionToAttempt(attempt, nextQuestion)
     },
     isQuestionMastered(ownerId: string, questionId: string) {
       const questionStat = this.getQuestionStats(ownerId)[questionId]
@@ -295,15 +368,16 @@ export const useExamStore = defineStore('exam', {
       sectionId: string | 'all',
       selectionMode: QuestionSelectionMode = 'adaptive',
     ) {
-      void selectionMode
+      const availableQuestionsCount = this.getQuestionsForSection(sectionId, {
+        ownerId,
+        includeMastered: false,
+      }).length
 
-      return Math.min(
-        this.getQuestionsForSection(sectionId, {
-          ownerId,
-          includeMastered: false,
-        }).length,
-        MAX_QUESTIONS_PER_TEST,
-      )
+      if (selectionMode === 'memorize') {
+        return availableQuestionsCount
+      }
+
+      return Math.min(availableQuestionsCount, MAX_QUESTIONS_PER_TEST)
     },
     generateQuestionSet(
       ownerId: string,
@@ -343,16 +417,6 @@ export const useExamStore = defineStore('exam', {
       difficulty: TestDifficulty,
       selectionMode: QuestionSelectionMode = 'adaptive',
     ) {
-      const questions = this.generateQuestionSet(ownerId, sectionId, selectionMode)
-
-      if (questions.length === 0) {
-        return null
-      }
-
-      const optionOrderByQuestionId = Object.fromEntries(
-        questions.map((question) => [question.id, getOptionIdsForDifficulty(question, difficulty)]),
-      )
-
       this.attempts
         .filter((attempt) => attempt.ownerId === ownerId && attempt.status === 'active')
         .forEach((attempt) => {
@@ -365,16 +429,37 @@ export const useExamStore = defineStore('exam', {
         id: createId('attempt'),
         ownerId,
         sectionId,
-        mode,
+        mode: selectionMode === 'memorize' ? 'immediate' : mode,
         difficulty,
         selectionMode,
         status: 'active',
-        questionIds: questions.map((question) => question.id),
-        optionOrderByQuestionId,
+        questionIds: [],
+        questionRefsByEntryId: selectionMode === 'memorize' ? {} : undefined,
+        optionOrderByQuestionId: {},
         currentIndex: 0,
         answers: [],
         startedAt: now,
         updatedAt: now,
+      }
+
+      if (selectionMode === 'memorize') {
+        const firstQuestion = this.pickMemorizationQuestion(ownerId, sectionId)
+
+        if (!firstQuestion) {
+          return null
+        }
+
+        this.appendQuestionToAttempt(attempt, firstQuestion)
+      } else {
+        const questions = this.generateQuestionSet(ownerId, sectionId, selectionMode)
+
+        if (questions.length === 0) {
+          return null
+        }
+
+        questions.forEach((question) => {
+          this.appendQuestionToAttempt(attempt, question)
+        })
       }
 
       this.attempts.unshift(attempt)
@@ -383,7 +468,7 @@ export const useExamStore = defineStore('exam', {
     },
     answerQuestion(attemptId: string, questionId: string, selectedOptionId: string) {
       const attempt = this.attempts.find((candidate) => candidate.id === attemptId)
-      const question = this.questionById(questionId)
+      const question = attempt ? this.questionByAttemptEntry(attempt, questionId) : null
 
       if (!attempt || !question || attempt.status !== 'active') {
         return
@@ -394,11 +479,19 @@ export const useExamStore = defineStore('exam', {
       const isCorrect = selectedOptionId === question.correctOptionId
 
       if (existingAnswer) {
+        if (attempt.mode === 'immediate' && existingAnswer.checkedAt) {
+          return
+        }
+
         existingAnswer.selectedOptionId = selectedOptionId
         existingAnswer.answeredAt = now
         if (attempt.mode === 'immediate' && !existingAnswer.checkedAt) {
           existingAnswer.isCorrect = isCorrect
           existingAnswer.checkedAt = now
+          if (attempt.selectionMode === 'memorize') {
+            this.recordAttemptAnswerStat(attempt, question, existingAnswer)
+            this.extendMemorizationAttempt(attempt)
+          }
         }
       } else {
         const answer: AttemptAnswer = {
@@ -413,6 +506,11 @@ export const useExamStore = defineStore('exam', {
         }
 
         attempt.answers.push(answer)
+
+        if (attempt.mode === 'immediate' && attempt.selectionMode === 'memorize') {
+          this.recordAttemptAnswerStat(attempt, question, answer)
+          this.extendMemorizationAttempt(attempt)
+        }
       }
 
       attempt.updatedAt = now
@@ -440,7 +538,7 @@ export const useExamStore = defineStore('exam', {
       const saveStats = options.saveStats ?? true
 
       attempt.answers.forEach((answer) => {
-        const question = this.questionById(answer.questionId)
+        const question = this.questionByAttemptEntry(attempt, answer.questionId)
 
         if (!question) {
           return
@@ -454,10 +552,10 @@ export const useExamStore = defineStore('exam', {
 
       if (saveStats) {
         attempt.answers.forEach((answer) => {
-          const question = this.questionById(answer.questionId)
+          const question = this.questionByAttemptEntry(attempt, answer.questionId)
 
           if (question) {
-            this.recordQuestionStat(attempt.ownerId, question, answer, attempt.difficulty ?? 'hard')
+            this.recordAttemptAnswerStat(attempt, question, answer)
           }
         })
         attempt.statsRecordedAt = now

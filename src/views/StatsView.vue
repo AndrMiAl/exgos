@@ -51,6 +51,7 @@ const difficultyLabels: Record<TestDifficulty, string> = {
 const selectionModeLabels: Record<QuestionSelectionMode, string> = {
   adaptive: 'Смешанный режим',
   balanced: 'Режим ГЭК',
+  memorize: 'Заучивание до 3 верных',
 }
 
 const ownerAttempts = computed(() => examStore.attempts.filter((attempt) => attempt.ownerId === authStore.ownerId))
@@ -89,7 +90,7 @@ const sectionStats = computed(() =>
         return false
       }
 
-      return attempt.questionIds.some((questionId) => questionId.startsWith(`${section.id}-`))
+      return attempt.questionIds.some((questionId) => examStore.questionByAttemptEntry(attempt, questionId)?.sectionId === section.id)
     })
 
     return {
@@ -333,6 +334,10 @@ function getSectionLabel(sectionId: string | 'all') {
 }
 
 function getSelectionModeLabel(attempt: TestAttempt) {
+  if (attempt.selectionMode === 'memorize') {
+    return attempt.sectionId === 'all' ? selectionModeLabels.memorize : 'Заучивание темы'
+  }
+
   if (attempt.sectionId !== 'all') {
     return 'По теме'
   }

@@ -2,7 +2,7 @@ export type AnswerFeedbackMode = 'immediate' | 'deferred'
 
 export type TestDifficulty = 'normal' | 'hard'
 
-export type QuestionSelectionMode = 'adaptive' | 'balanced'
+export type QuestionSelectionMode = 'adaptive' | 'balanced' | 'memorize'
 
 export type AttemptStatus = 'active' | 'completed' | 'abandoned'
 
@@ -62,6 +62,7 @@ export interface AttemptAnswer {
   isCorrect?: boolean
   answeredAt: string
   checkedAt?: string
+  statsRecordedAt?: string
 }
 
 export interface TestAttempt {
@@ -74,6 +75,7 @@ export interface TestAttempt {
   status: AttemptStatus
   completionReason?: AttemptCompletionReason
   questionIds: string[]
+  questionRefsByEntryId?: Record<string, string>
   optionOrderByQuestionId?: Record<string, string[]>
   currentIndex: number
   answers: AttemptAnswer[]

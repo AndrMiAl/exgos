@@ -73,6 +73,7 @@ const currentAttempt = ref<TestAttempt | null>(null)
 const overallSummary = computed(() => examStore.getQuestionPoolSummary(ownerId.value, 'all'))
 const adaptiveQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'adaptive'))
 const balancedQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'balanced'))
+const memorizeQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'memorize'))
 const practiceThemeClass = computed(() => (themeStore.isDark ? 'practice-page--dark' : 'practice-page--light'))
 
 function getSectionShortTitle(title: string) {
@@ -166,7 +167,12 @@ const attemptKnowledgeSummary = computed(() => {
   if (attempt.sectionId === 'all') {
     return {
       ...overallKnowledge.value,
-      title: attempt.selectionMode === 'balanced' ? 'Общий прогресс после режима ГЭК' : 'Общий прогресс по всем темам',
+      title:
+        attempt.selectionMode === 'balanced'
+          ? 'Общий прогресс после режима ГЭК'
+          : attempt.selectionMode === 'memorize'
+            ? 'Общий прогресс после режима заучивания'
+            : 'Общий прогресс по всем темам',
       subtitle: 'Сколько вопросов по всей программе уже закреплено',
     }
   }
@@ -185,14 +191,23 @@ const attemptKnowledgeSummary = computed(() => {
 })
 
 const workingAttempt = computed(() => currentAttempt.value ?? activeAttempt.value)
-const currentQuestion = computed(() => {
+const currentQuestionEntryId = computed(() => {
   const attempt = workingAttempt.value
 
   if (!attempt) {
     return null
   }
 
-  return examStore.questionById(attempt.questionIds[attempt.currentIndex])
+  return attempt.questionIds[attempt.currentIndex] ?? null
+})
+const currentQuestion = computed(() => {
+  const attempt = workingAttempt.value
+
+  if (!attempt || !currentQuestionEntryId.value) {
+    return null
+  }
+
+  return examStore.questionByAttemptEntry(attempt, currentQuestionEntryId.value)
 })
 const currentSection = computed(() => {
   if (!currentQuestion.value) {
@@ -203,17 +218,35 @@ const currentSection = computed(() => {
 })
 const currentAnswer = computed(() => {
   const attempt = workingAttempt.value
-  const question = currentQuestion.value
 
-  if (!attempt || !question) {
+  if (!attempt || !currentQuestionEntryId.value) {
     return null
   }
 
-  return attempt.answers.find((answer) => answer.questionId === question.id) ?? null
+  return attempt.answers.find((answer) => answer.questionId === currentQuestionEntryId.value) ?? null
+})
+const currentQuestionMastery = computed(() => {
+  const question = currentQuestion.value
+
+  if (!question) {
+    return null
+  }
+
+  const questionStat = examStore.getQuestionStats(ownerId.value)[question.id]
+  const correctAnswers = questionStat?.correctAnswers ?? 0
+
+  return {
+    correctAnswers,
+    remainingCorrectAnswers: Math.max(0, MASTERED_CORRECT_ANSWERS - correctAnswers),
+    isMastered: correctAnswers >= MASTERED_CORRECT_ANSWERS,
+  }
 })
 
-function getOrderedOptions(question: ExamQuestion, attempt: TestAttempt) {
-  const optionOrder = attempt.optionOrderByQuestionId?.[question.id] ?? question.options.map((option) => option.id)
+function getOrderedOptions(question: ExamQuestion, attempt: TestAttempt, questionEntryId: string) {
+  const optionOrder =
+    attempt.optionOrderByQuestionId?.[questionEntryId] ??
+    attempt.optionOrderByQuestionId?.[question.id] ??
+    question.options.map((option) => option.id)
   const optionsById = new Map(question.options.map((option) => [option.id, option]))
   const candidateOrder = [...optionOrder, ...question.options.map((option) => option.id).filter((optionId) => !optionOrder.includes(optionId))]
   const desiredCount = optionOrder.length
@@ -254,6 +287,10 @@ function getOrderedOptions(question: ExamQuestion, attempt: TestAttempt) {
 }
 
 function getAttemptSelectionLabel(attempt: TestAttempt) {
+  if (attempt.selectionMode === 'memorize') {
+    return attempt.sectionId === 'all' ? 'Заучивание до 3 верных' : 'Заучивание темы до 3 верных'
+  }
+
   if (attempt.sectionId !== 'all') {
     return 'Подбор по теме'
   }
@@ -406,7 +443,8 @@ function launchAttempt(
   mode = selectedMode.value,
   difficulty = selectedDifficulty.value,
 ) {
-  const attempt = examStore.startAttempt(ownerId.value, sectionId, mode, difficulty, selectionMode)
+  const effectiveMode: AnswerFeedbackMode = selectionMode === 'memorize' ? 'immediate' : mode
+  const attempt = examStore.startAttempt(ownerId.value, sectionId, effectiveMode, difficulty, selectionMode)
 
   if (!attempt) {
     notifyNoQuestions(sectionId)
@@ -414,7 +452,7 @@ function launchAttempt(
   }
 
   selectedSectionId.value = sectionId
-  selectedMode.value = mode
+  selectedMode.value = effectiveMode
   selectedDifficulty.value = difficulty
   selectedSelectionMode.value = selectionMode
   currentAttempt.value = attempt
@@ -424,11 +462,11 @@ const orderedOptions = computed(() => {
   const attempt = workingAttempt.value
   const question = currentQuestion.value
 
-  if (!attempt || !question) {
+  if (!attempt || !question || !currentQuestionEntryId.value) {
     return []
   }
 
-  return getOrderedOptions(question, attempt)
+  return getOrderedOptions(question, attempt, currentQuestionEntryId.value)
 })
 const currentCorrectOption = computed(() => {
   const question = currentQuestion.value
@@ -488,13 +526,12 @@ const selectedOptionId = computed({
   },
   set(value: string) {
     const attempt = workingAttempt.value
-    const question = currentQuestion.value
 
-    if (!attempt || !question) {
+    if (!attempt || !currentQuestionEntryId.value) {
       return
     }
 
-    examStore.answerQuestion(attempt.id, question.id, value)
+    examStore.answerQuestion(attempt.id, currentQuestionEntryId.value, value)
   },
 })
 const progressPercent = computed(() => {
@@ -504,7 +541,26 @@ const progressPercent = computed(() => {
     return 0
   }
 
+  if (attempt.selectionMode === 'memorize') {
+    const summary = examStore.getQuestionPoolSummary(ownerId.value, attempt.sectionId)
+
+    if (summary.totalQuestions === 0) {
+      return 0
+    }
+
+    return Math.round((summary.masteredQuestions / summary.totalQuestions) * 100)
+  }
+
   return Math.round(((attempt.currentIndex + 1) / attempt.questionIds.length) * 100)
+})
+const memorizationRemainingQuestions = computed(() => {
+  const attempt = workingAttempt.value
+
+  if (!attempt || attempt.selectionMode !== 'memorize') {
+    return 0
+  }
+
+  return examStore.getQuestionPoolSummary(ownerId.value, attempt.sectionId).availableQuestions
 })
 const result = computed(() => {
   const attempt = workingAttempt.value
@@ -537,7 +593,7 @@ const attemptSectionResults = computed<AttemptSectionResult[]>(() => {
   const summaryBySection = new Map<string, AttemptSectionResult>()
 
   for (const questionId of attempt.questionIds) {
-    const question = examStore.questionById(questionId)
+    const question = examStore.questionByAttemptEntry(attempt, questionId)
 
     if (!question) {
       continue
@@ -564,7 +620,7 @@ const attemptSectionResults = computed<AttemptSectionResult[]>(() => {
   }
 
   for (const answer of attempt.answers.filter((entry) => entry.checkedAt)) {
-    const question = examStore.questionById(answer.questionId)
+    const question = examStore.questionByAttemptEntry(attempt, answer.questionId)
 
     if (!question) {
       continue
@@ -633,7 +689,26 @@ const quickContinueLabel = computed(() => {
     return 'Далее'
   }
 
+  if (attempt.selectionMode === 'memorize') {
+    return memorizationRemainingQuestions.value > 0 ? 'Следующий повтор' : 'Завершить заучивание'
+  }
+
   return attempt.currentIndex < attempt.questionIds.length - 1 ? 'Следующий вопрос' : 'Завершить попытку'
+})
+const isMemorizationAttempt = computed(() => workingAttempt.value?.selectionMode === 'memorize')
+const canSkipStatSave = computed(() => !isMemorizationAttempt.value)
+const attemptCounterLabel = computed(() => {
+  const attempt = workingAttempt.value
+
+  if (!attempt) {
+    return ''
+  }
+
+  if (attempt.selectionMode === 'memorize') {
+    return `Повтор ${attempt.currentIndex + 1} · осталось закрепить ${memorizationRemainingQuestions.value}`
+  }
+
+  return `Вопрос ${attempt.currentIndex + 1} из ${attempt.questionIds.length}`
 })
 
 function startAdaptiveAttempt() {
@@ -644,8 +719,16 @@ function startBalancedAttempt() {
   launchAttempt('all', 'balanced')
 }
 
+function startMemorizeAttempt() {
+  launchAttempt('all', 'memorize', 'immediate')
+}
+
 function startSectionAttempt(sectionId: string) {
   launchAttempt(sectionId, 'adaptive')
+}
+
+function startMemorizeSectionAttempt(sectionId: string) {
+  launchAttempt(sectionId, 'memorize', 'immediate')
 }
 
 function restartAttempt() {
@@ -688,7 +771,13 @@ function goNext() {
   }
 }
 
-const finishDialogTitle = computed(() => (finishEarly.value ? 'Завершить тест досрочно' : 'Завершить тест'))
+const finishDialogTitle = computed(() => {
+  if (isMemorizationAttempt.value) {
+    return finishEarly.value ? 'Остановить заучивание' : 'Завершить заучивание'
+  }
+
+  return finishEarly.value ? 'Завершить тест досрочно' : 'Завершить тест'
+})
 
 function openFinishDialog(isEarly: boolean) {
   saveFinishedStats.value = true
@@ -705,7 +794,7 @@ function finishAttempt() {
 
   examStore.finishAttempt(attempt.id, {
     finishedEarly: finishEarly.value,
-    saveStats: saveFinishedStats.value,
+    saveStats: isMemorizationAttempt.value ? true : saveFinishedStats.value,
   })
   finishDialogVisible.value = false
 }
@@ -828,6 +917,41 @@ function finishAttempt() {
           </el-button>
         </el-card>
 
+        <el-card shadow="never" class="section-option section-option--overall">
+          <span>Режим заучивания</span>
+          <strong>Пока не закрепите все темы</strong>
+          <small>
+            Вопросы повторяются случайно, пока каждый не получит {{ MASTERED_CORRECT_ANSWERS }} верных ответа.
+            Сейчас осталось: {{ memorizeQuestionCount }}
+          </small>
+          <div class="knowledge-meter">
+            <div class="knowledge-meter__header">
+              <span>Закреплено вопросов</span>
+              <strong :style="{ color: overallKnowledge.knowledgeColor }">{{ overallKnowledge.knowledgePercent }}%</strong>
+            </div>
+            <el-progress
+              :percentage="overallKnowledge.knowledgePercent"
+              :show-text="false"
+              :stroke-width="10"
+              :color="overallKnowledge.knowledgeColor"
+              class="knowledge-progress"
+            />
+            <div class="knowledge-meter__footer">
+              <span>Проверка сразу, потому что от нее зависит следующий повтор</span>
+              <span>{{ overallKnowledge.masteredQuestions }} из {{ overallKnowledge.totalQuestions }} уже закреплено</span>
+            </div>
+          </div>
+          <el-button
+            type="warning"
+            plain
+            :icon="Select"
+            :disabled="memorizeQuestionCount === 0"
+            @click="startMemorizeAttempt"
+          >
+            Заучивать все темы: {{ memorizeQuestionCount }} вопросов
+          </el-button>
+        </el-card>
+
         <el-card shadow="never" class="section-option section-option--gek">
           <span>Режим ГЭК</span>
           <strong>Равномерно по всем темам</strong>
@@ -899,15 +1023,26 @@ function finishAttempt() {
               <span>{{ knowledge.masteredQuestions }} из {{ knowledge.totalQuestions }} закреплено</span>
             </div>
           </div>
-          <el-button
-            type="primary"
-            plain
-            :icon="Select"
-            :disabled="knowledge.availableQuestions === 0"
-            @click="startSectionAttempt(section.id)"
-          >
-            Решать раздел: {{ Math.min(knowledge.availableQuestions, 50) }} вопросов
-          </el-button>
+          <div class="section-option__actions">
+            <el-button
+              type="primary"
+              plain
+              :icon="Select"
+              :disabled="knowledge.availableQuestions === 0"
+              @click="startSectionAttempt(section.id)"
+            >
+              Решать раздел: {{ Math.min(knowledge.availableQuestions, 50) }} вопросов
+            </el-button>
+            <el-button
+              type="warning"
+              plain
+              :icon="Select"
+              :disabled="knowledge.availableQuestions === 0"
+              @click="startMemorizeSectionAttempt(section.id)"
+            >
+              Заучивать до 3 верных: {{ knowledge.availableQuestions }}
+            </el-button>
+          </div>
         </el-card>
       </div>
     </el-card>
@@ -921,13 +1056,16 @@ function finishAttempt() {
       <div class="attempt-toolbar">
         <div class="attempt-toolbar__heading">
           <strong class="attempt-toolbar__count">
-            Вопрос {{ workingAttempt.currentIndex + 1 }} из {{ workingAttempt.questionIds.length }}
+            {{ attemptCounterLabel }}
           </strong>
           <div class="attempt-toolbar__meta">
             <span class="attempt-meta attempt-meta--title">{{ currentSection?.title }}</span>
             <span class="attempt-meta">{{ workingAttempt.mode === 'immediate' ? 'Проверка сразу' : 'Проверка после завершения' }}</span>
             <span class="attempt-meta">{{ workingAttempt.difficulty === 'normal' ? 'Обычный' : 'Сложный' }}</span>
             <span class="attempt-meta">{{ getAttemptSelectionLabel(workingAttempt) }}</span>
+            <span v-if="workingAttempt.selectionMode === 'memorize' && currentQuestionMastery" class="attempt-meta">
+              {{ currentQuestionMastery.isMastered ? 'Уже закреплен' : `До закрепления: ${currentQuestionMastery.correctAnswers}/${MASTERED_CORRECT_ANSWERS}` }}
+            </span>
           </div>
         </div>
         <div class="toolbar-actions">
@@ -973,13 +1111,25 @@ function finishAttempt() {
         >
           <div class="quick-next-bar__content">
             <strong>
-              {{ currentAnswer.isCorrect ? 'Ответ проверен, можно идти дальше' : 'Разбор уже показан, можно идти дальше' }}
+              {{
+                workingAttempt.selectionMode === 'memorize'
+                  ? currentQuestionMastery?.isMastered
+                    ? 'Вопрос закреплен, можно идти дальше'
+                    : 'Повтор будет добавлен в очередь, можно идти дальше'
+                  : currentAnswer.isCorrect
+                    ? 'Ответ проверен, можно идти дальше'
+                    : 'Разбор уже показан, можно идти дальше'
+              }}
             </strong>
             <span>
               {{
-                workingAttempt.currentIndex < workingAttempt.questionIds.length - 1
-                  ? 'Следующий вопрос открывается сразу, без прокрутки вниз.'
-                  : 'Это последний вопрос. Отсюда можно сразу завершить попытку.'
+                workingAttempt.selectionMode === 'memorize'
+                  ? memorizationRemainingQuestions > 0
+                    ? 'Следующий повтор открывается сразу. Вопрос будет исчезать из очереди только после трех верных ответов.'
+                    : 'Все вопросы в этом наборе уже закреплены. Отсюда можно завершить режим заучивания.'
+                  : workingAttempt.currentIndex < workingAttempt.questionIds.length - 1
+                    ? 'Следующий вопрос открывается сразу, без прокрутки вниз.'
+                    : 'Это последний вопрос. Отсюда можно сразу завершить попытку.'
               }}
             </span>
           </div>
@@ -1128,9 +1278,15 @@ function finishAttempt() {
     </template>
 
     <el-dialog v-model="finishDialogVisible" :title="finishDialogTitle" width="460px">
-      <p class="muted">Выберите, учитывать ли данные ответы в статистике по вопросам.</p>
+      <p class="muted">
+        {{
+          canSkipStatSave
+            ? 'Выберите, учитывать ли данные ответы в статистике по вопросам.'
+            : 'В режиме заучивания статистика записывается сразу после каждого ответа, потому что от нее зависит следующий повтор.'
+        }}
+      </p>
 
-      <el-radio-group v-model="saveFinishedStats" class="finish-options">
+      <el-radio-group v-if="canSkipStatSave" v-model="saveFinishedStats" class="finish-options">
         <el-radio :value="true" border>Сохранить статистику по отвеченным вопросам</el-radio>
         <el-radio :value="false" border>Завершить без записи статистики</el-radio>
       </el-radio-group>
@@ -1366,6 +1522,11 @@ function finishAttempt() {
   display: grid;
   gap: 12px;
   padding: 20px;
+}
+
+.section-option__actions {
+  display: grid;
+  gap: 10px;
 }
 
 .section-option--overall {
