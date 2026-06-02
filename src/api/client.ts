@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '')
+const API_BASE = (import.meta.env.VITE_API_URL ?? `${import.meta.env.BASE_URL}api`).replace(/\/$/, '')
 export interface ApiAuthResponse<T> {
   token: string
   user: T

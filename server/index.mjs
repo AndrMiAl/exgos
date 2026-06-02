@@ -11,8 +11,25 @@ const rootDir = path.resolve(__dirname, '..')
 const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data')
 const dbPath = path.join(dataDir, 'app-db.json')
 const port = Number(process.env.PORT ?? 3001)
+const rawAppBasePath = process.env.APP_BASE_PATH ?? '/'
 const LOGIN_PATTERN = /^[\x21-\x7E]+$/
 const PASSWORD_PATTERN = /^[\x21-\x7E]+$/
+
+function normalizeBasePath(basePath) {
+  const value = String(basePath ?? '/').trim()
+
+  if (!value || value === '/') {
+    return '/'
+  }
+
+  return `/${value.replace(/^\/+|\/+$/g, '')}`
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+const appBasePath = normalizeBasePath(rawAppBasePath)
 
 function createEmptyDb() {
   return {
@@ -150,11 +167,13 @@ app.use(cors(corsOptions))
 
 app.use(express.json({ limit: '5mb' }))
 
-app.get('/api/health', (_req, res) => {
+const apiRouter = express.Router()
+
+apiRouter.get('/health', (_req, res) => {
   res.json({ ok: true })
 })
 
-app.post('/api/auth/register', (req, res) => {
+apiRouter.post('/auth/register', (req, res) => {
   const { login, password } = req.body ?? {}
   const error = validateCredentials(login, password)
 
@@ -194,7 +213,7 @@ app.post('/api/auth/register', (req, res) => {
   res.status(201).json({ token, user: safeUser(user) })
 })
 
-app.post('/api/auth/login', (req, res) => {
+apiRouter.post('/auth/login', (req, res) => {
   const { login, password } = req.body ?? {}
   const db = readDb()
   const user = db.users.find((candidate) => normalizeLogin(candidate.login) === normalizeLogin(login))
@@ -222,17 +241,17 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, user: safeUser(user) })
 })
 
-app.get('/api/auth/me', authRequired, (req, res) => {
+apiRouter.get('/auth/me', authRequired, (req, res) => {
   res.json({ user: safeUser(req.user) })
 })
 
-app.post('/api/auth/logout', authRequired, (req, res) => {
+apiRouter.post('/auth/logout', authRequired, (req, res) => {
   delete req.db.sessions[req.token]
   writeDb(req.db)
   res.json({ ok: true })
 })
 
-app.put('/api/profile', authRequired, (req, res) => {
+apiRouter.put('/profile', authRequired, (req, res) => {
   req.user.firstName = String(req.body?.firstName ?? '').trim()
   req.user.lastName = String(req.body?.lastName ?? '').trim()
   req.user.groupName = String(req.body?.groupName ?? '').trim()
@@ -241,13 +260,13 @@ app.put('/api/profile', authRequired, (req, res) => {
   res.json({ user: safeUser(req.user) })
 })
 
-app.get('/api/progress', authRequired, (req, res) => {
+apiRouter.get('/progress', authRequired, (req, res) => {
   req.db.progressByUser[req.user.id] ??= emptyProgress()
   writeDb(req.db)
   res.json(req.db.progressByUser[req.user.id])
 })
 
-app.put('/api/progress', authRequired, (req, res) => {
+apiRouter.put('/progress', authRequired, (req, res) => {
   const attempts = Array.isArray(req.body?.attempts) ? req.body.attempts : []
   const questionStats = req.body?.questionStats && typeof req.body.questionStats === 'object' ? req.body.questionStats : {}
 
@@ -262,10 +281,25 @@ app.put('/api/progress', authRequired, (req, res) => {
   res.json({ ok: true })
 })
 
+app.use('/api', apiRouter)
+
+if (appBasePath !== '/') {
+  app.use(`${appBasePath}/api`, apiRouter)
+}
+
 const distDir = path.join(rootDir, 'dist')
 
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir))
+
+  if (appBasePath !== '/') {
+    app.use(appBasePath, express.static(distDir))
+    const basePattern = new RegExp(`^${escapeRegex(appBasePath)}(?:/.*)?$`)
+    app.get(basePattern, (_req, res) => {
+      res.sendFile(path.join(distDir, 'index.html'))
+    })
+  }
+
   app.get(/.*/, (_req, res) => {
     res.sendFile(path.join(distDir, 'index.html'))
   })
@@ -273,5 +307,6 @@ if (fs.existsSync(distDir)) {
 
 app.listen(port, '0.0.0.0', () => {
   console.log(`API server listening on http://127.0.0.1:${port}`)
+  console.log(`App base path: ${appBasePath}`)
   console.log(`Data directory: ${dataDir}`)
 })
