@@ -170,13 +170,34 @@ function restoreEditorSelection(textarea: HTMLTextAreaElement, start: number, en
 }
 
 function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
-  if (event.key !== 'Tab') {
-    return
-  }
-
   const textarea = event.target instanceof HTMLTextAreaElement ? event.target : null
 
   if (!textarea) {
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+
+    const value = codeDrafts[taskId] ?? ''
+    const selectionStart = textarea.selectionStart ?? 0
+    const selectionEnd = textarea.selectionEnd ?? selectionStart
+    const lineStart = value.lastIndexOf('\n', Math.max(0, selectionStart - 1)) + 1
+    const currentLineBeforeCaret = value.slice(lineStart, selectionStart)
+    const currentIndent = currentLineBeforeCaret.match(/^[\t ]*/)?.[0] ?? ''
+    const trimmedBeforeCaret = currentLineBeforeCaret.trimEnd()
+    const shouldIncreaseIndent = /[:([{]$/.test(trimmedBeforeCaret)
+    const nextIndent = `${currentIndent}${shouldIncreaseIndent ? editorIndent : ''}`
+    const nextValue = `${value.slice(0, selectionStart)}\n${nextIndent}${value.slice(selectionEnd)}`
+    const nextCaret = selectionStart + 1 + nextIndent.length
+
+    codeDrafts[taskId] = nextValue
+    persistCode(taskId)
+    restoreEditorSelection(textarea, nextCaret, nextCaret)
+    return
+  }
+
+  if (event.key !== 'Tab') {
     return
   }
 
