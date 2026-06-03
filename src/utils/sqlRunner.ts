@@ -41,6 +41,32 @@ function normalizeQuery(query: string) {
     .replace(/;+$/, '')
 }
 
+function stripSqlComments(query: string) {
+  return query
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--.*$/gm, ' ')
+    .trim()
+}
+
+function validateReadOnlyQuery(query: string) {
+  const normalized = stripSqlComments(normalizeQuery(query))
+  const lowered = normalized.toLowerCase()
+
+  if (!lowered) {
+    return 'Запрос пустой. Напиши SELECT или WITH и попробуй снова.'
+  }
+
+  if (!/^(select|with)\b/.test(lowered)) {
+    return 'Учебная SQL-база доступна только на чтение: используй только SELECT или WITH.'
+  }
+
+  if (/\b(insert|update|delete|drop|alter|create|truncate|merge|replace|grant|revoke)\b/.test(lowered)) {
+    return 'Изменять учебную SQL-базу нельзя. Разрешены только SELECT и WITH.'
+  }
+
+  return null
+}
+
 function createDatabase(scenario: GeSqlScenario) {
   installSqlHelpers()
 
@@ -124,6 +150,17 @@ function executeQuery(query: string, scenarioId: keyof typeof geSqlScenarios): S
   }
 
   try {
+    const validationError = validateReadOnlyQuery(query)
+
+    if (validationError) {
+      return {
+        status: 'error',
+        columns: [],
+        rows: [],
+        stderr: validationError,
+      }
+    }
+
     const db = createDatabase(scenario)
     const result = db.exec(normalizeQuery(query))
     const rows = Array.isArray(result) ? result : []

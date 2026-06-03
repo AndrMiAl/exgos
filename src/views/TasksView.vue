@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { CollectionTag, EditPen, House } from '@element-plus/icons-vue'
+import { EditPen, House } from '@element-plus/icons-vue'
 import { RouterLink } from 'vue-router'
 
 import { geSqlScenarios } from '@/data/geSqlScenarios'
@@ -73,7 +73,7 @@ const sections: ViewSection[] = geTaskSections.map((section) => ({
   })),
 }))
 
-const openSections = ref(sections.map((section) => section.id))
+const openSections = ref<string[]>([])
 const codeDrafts = reactive<Record<string, string>>({})
 const stdinDrafts = reactive<Record<string, string>>({})
 const runStates = reactive<Record<string, RunState | undefined>>({})
@@ -458,6 +458,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 <div v-if="getSqlRunner(task) && sqlScenario(task)" class="task-card__block">
                   <h3>{{ sqlScenario(task)?.title }}</h3>
                   <p class="muted">{{ sqlScenario(task)?.description }}</p>
+                  <p class="task-runner__note">База на каждом запуске пересоздается заново и доступна только на чтение.</p>
                   <ul class="task-list task-list--compact">
                     <li v-for="line in sqlScenario(task)?.schema" :key="line">
                       <code>{{ line }}</code>
@@ -598,19 +599,6 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
       </el-collapse-item>
     </el-collapse>
 
-    <el-card shadow="never" class="task-help-card">
-      <div class="task-help-card__content">
-        <div>
-          <p class="eyebrow">Быстрый ориентир</p>
-          <h2>Что именно здесь собрано</h2>
-          <p class="muted">
-            Python, алгоритмы, ML, SQL и Web из распакованного GE-main. Теперь страница работает как практический
-            банк: читаешь задачу, смотришь ожидаемый результат и ниже пробуешь написать решение сам.
-          </p>
-        </div>
-        <el-icon><CollectionTag /></el-icon>
-      </div>
-    </el-card>
   </section>
 </template>
 
@@ -788,23 +776,10 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   color: var(--app-text-strong);
 }
 
-.task-help-card__content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.task-help-card__content .el-icon {
-  font-size: 48px;
-  color: var(--app-accent);
-}
-
 @media (max-width: 900px) {
   .task-section-title,
   .task-card__header,
-  .task-runner__header,
-  .task-help-card__content {
+  .task-runner__header {
     display: grid;
   }
 
