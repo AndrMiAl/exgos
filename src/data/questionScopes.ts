@@ -5,10 +5,25 @@ export interface QuestionScopePreset {
   title: string
   shortTitle: string
   description: string
-  materialIds: string[]
+  materialIds?: string[]
+  questionIds?: string[]
 }
 
 export const STATE_EXAM_2026_PDFS_SCOPE_ID = 'state-exam-2026-pdfs'
+
+function buildQuestionRange(sectionNumber: number, from: number, to: number) {
+  return Array.from({ length: to - from + 1 }, (_, index) => `section-${sectionNumber}-q${from + index}`)
+}
+
+const stateExam2026PdfQuestionIds = [
+  ...buildQuestionRange(1, 101, 114),
+  ...buildQuestionRange(2, 101, 113),
+  ...buildQuestionRange(3, 6, 19),
+  ...buildQuestionRange(4, 12, 23),
+  ...buildQuestionRange(5, 17, 30),
+  ...buildQuestionRange(6, 15, 28),
+  ...buildQuestionRange(7, 25, 34),
+]
 
 export const questionScopePresets: QuestionScopePreset[] = [
   {
@@ -16,11 +31,8 @@ export const questionScopePresets: QuestionScopePreset[] = [
     title: 'Только вопросы из I и II госэкзамена 2026',
     shortTitle: 'I и II госэкзамен 2026',
     description:
-      'В набор попадают только вопросы, у которых источником отмечены два PDF с вариантами госэкзамена 2026. Прогресс общий: если закрепили вопрос здесь, он закрепится и в других режимах.',
-    materialIds: [
-      'mat-shared-i-gosudarstvennyi-itogovyi-ekzamen-2026-pdf',
-      'mat-shared-ii-gosudarstvennyi-itogovyi-ekzamen-2026-pdf',
-    ],
+      'Набор пересобран по двум PDF-вариантам госэкзамена 2026. Здесь только вопросы из этих файлов по всем разделам, а прогресс общий с остальными режимами.',
+    questionIds: stateExam2026PdfQuestionIds,
   },
 ]
 
@@ -39,5 +51,13 @@ export function questionMatchesScope(question: ExamQuestion, scopeId?: string | 
     return true
   }
 
-  return scope.materialIds.some((materialId) => question.materialIds.includes(materialId))
+  if (scope.questionIds?.length) {
+    return scope.questionIds.includes(question.id)
+  }
+
+  if (scope.materialIds?.length) {
+    return scope.materialIds.some((materialId) => question.materialIds.includes(materialId))
+  }
+
+  return true
 }

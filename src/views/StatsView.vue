@@ -53,6 +53,7 @@ const selectionModeLabels: Record<QuestionSelectionMode, string> = {
   adaptive: 'Смешанный режим',
   balanced: 'Режим ГЭК',
   memorize: 'Заучивание до 3 верных',
+  mistakes: 'Повтор ошибок',
 }
 
 const ownerAttempts = computed(() => examStore.attempts.filter((attempt) => attempt.ownerId === authStore.ownerId))

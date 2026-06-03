@@ -2,7 +2,7 @@ export type AnswerFeedbackMode = 'immediate' | 'deferred'
 
 export type TestDifficulty = 'normal' | 'hard'
 
-export type QuestionSelectionMode = 'adaptive' | 'balanced' | 'memorize'
+export type QuestionSelectionMode = 'adaptive' | 'balanced' | 'memorize' | 'mistakes'
 
 export type AttemptStatus = 'active' | 'completed' | 'abandoned'
 

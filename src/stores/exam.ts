@@ -437,6 +437,7 @@ export const useExamStore = defineStore('exam', {
       difficulty: TestDifficulty,
       selectionMode: QuestionSelectionMode = 'adaptive',
       questionScopeId?: string,
+      customQuestionIds?: string[],
     ) {
       this.attempts
         .filter((attempt) => attempt.ownerId === ownerId && attempt.status === 'active')
@@ -473,7 +474,11 @@ export const useExamStore = defineStore('exam', {
 
         this.appendQuestionToAttempt(attempt, firstQuestion)
       } else {
-        const questions = this.generateQuestionSet(ownerId, sectionId, selectionMode, questionScopeId)
+        const questions = customQuestionIds?.length
+          ? customQuestionIds
+              .map((questionId) => this.questionById(questionId))
+              .filter((question): question is ExamQuestion => Boolean(question))
+          : this.generateQuestionSet(ownerId, sectionId, selectionMode, questionScopeId)
 
         if (questions.length === 0) {
           return null

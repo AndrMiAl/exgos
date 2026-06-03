@@ -329,6 +329,10 @@ function getOrderedOptions(question: ExamQuestion, attempt: TestAttempt, questio
 }
 
 function getAttemptSelectionLabel(attempt: TestAttempt) {
+  if (attempt.selectionMode === 'mistakes') {
+    return 'Повтор ошибок'
+  }
+
   if (attempt.questionScopeId) {
     if (attempt.selectionMode === 'memorize') {
       return 'Заучивание только по двум PDF'
@@ -510,6 +514,7 @@ function launchAttempt(
   mode = selectedMode.value,
   difficulty = selectedDifficulty.value,
   questionScopeId?: string,
+  customQuestionIds?: string[],
 ) {
   const effectiveMode: AnswerFeedbackMode = selectionMode === 'memorize' ? 'immediate' : mode
   const attempt = examStore.startAttempt(
@@ -519,6 +524,7 @@ function launchAttempt(
     difficulty,
     selectionMode,
     questionScopeId,
+    customQuestionIds,
   )
 
   if (!attempt) {
@@ -658,6 +664,30 @@ const result = computed(() => {
     grade: getExamGrade(percent),
   }
 })
+const incorrectQuestionIds = computed(() => {
+  const attempt = workingAttempt.value
+
+  if (!attempt || attempt.status !== 'completed') {
+    return []
+  }
+
+  const seenQuestionIds = new Set<string>()
+  const wrongQuestionIds: string[] = []
+
+  for (const answer of attempt.answers.filter((entry) => entry.checkedAt && entry.isCorrect === false)) {
+    const question = examStore.questionByAttemptEntry(attempt, answer.questionId)
+
+    if (!question || seenQuestionIds.has(question.id)) {
+      continue
+    }
+
+    seenQuestionIds.add(question.id)
+    wrongQuestionIds.push(question.id)
+  }
+
+  return wrongQuestionIds
+})
+const incorrectQuestionsCount = computed(() => incorrectQuestionIds.value.length)
 const attemptSectionResults = computed<AttemptSectionResult[]>(() => {
   const attempt = workingAttempt.value
 
@@ -860,6 +890,24 @@ function startMemorizeSectionAttempt(sectionId: string) {
   launchAttempt(sectionId, 'memorize', 'immediate')
 }
 
+function startIncorrectRetryAttempt() {
+  const attempt = workingAttempt.value
+
+  if (!attempt || incorrectQuestionIds.value.length === 0) {
+    ElMessage.info('Нет ошибок для отдельного повтора.')
+    return
+  }
+
+  launchAttempt(
+    attempt.sectionId,
+    'mistakes',
+    attempt.selectionMode === 'memorize' ? 'immediate' : attempt.mode,
+    attempt.difficulty ?? selectedDifficulty.value,
+    attempt.questionScopeId,
+    incorrectQuestionIds.value,
+  )
+}
+
 function restartAttempt() {
   const attempt = workingAttempt.value
   const sectionId = attempt?.sectionId ?? selectedSectionId.value
@@ -867,8 +915,14 @@ function restartAttempt() {
   const difficulty = attempt?.difficulty ?? selectedDifficulty.value
   const selectionMode = attempt?.selectionMode ?? selectedSelectionMode.value
   const questionScopeId = attempt?.questionScopeId
+  const customQuestionIds =
+    attempt?.selectionMode === 'mistakes'
+      ? attempt.questionIds
+          .map((questionEntryId) => examStore.questionByAttemptEntry(attempt, questionEntryId)?.id)
+          .filter((questionId): questionId is string => Boolean(questionId))
+      : undefined
 
-  launchAttempt(sectionId, selectionMode, mode, difficulty, questionScopeId)
+  launchAttempt(sectionId, selectionMode, mode, difficulty, questionScopeId, customQuestionIds)
 }
 
 function resumeAttempt() {
@@ -1534,6 +1588,11 @@ function finishAttempt() {
           <span>Итоговая оценка</span>
           <strong :class="`grade-badge grade-badge--${result.grade.tone}`">{{ result.grade.label }}</strong>
         </div>
+        <div v-if="incorrectQuestionsCount > 0" class="result-actions">
+          <el-button type="warning" plain @click="startIncorrectRetryAttempt">
+            Пройти ошибки: {{ incorrectQuestionsCount }}
+          </el-button>
+        </div>
         <div v-if="strongestAttemptSection || weakestAttemptSection" class="result-summary-grid">
           <div v-if="strongestAttemptSection" class="result-summary-tile result-summary-tile--success">
             <span>Сильнее всего</span>
@@ -1817,6 +1876,14 @@ function finishAttempt() {
 .result-knowledge-card small {
   color: var(--practice-muted);
   line-height: 1.5;
+}
+
+.result-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 auto 18px;
 }
 
 .result-summary-grid {
