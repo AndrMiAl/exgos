@@ -70,6 +70,7 @@ export interface TestAttempt {
   ownerId: string
   sectionId: string | 'all'
   questionScopeId?: string
+  questionLimit?: number
   mode: AnswerFeedbackMode
   difficulty?: TestDifficulty
   selectionMode?: QuestionSelectionMode

@@ -38,6 +38,9 @@ const stateExamPdfKnowledgePercent = computed(() => {
 
   return Math.round((stateExamPdfSummary.value.masteredQuestions / stateExamPdfSummary.value.totalQuestions) * 100)
 })
+const stateExamPdfVariantQuestionCount = computed(() => Math.min(stateExamPdfSummary.value.availableQuestions, 48))
+const stateExamPdfRandomQuestionCount = computed(() => Math.min(stateExamPdfSummary.value.availableQuestions, 50))
+const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.availableQuestions)
 </script>
 
 <template>
@@ -112,8 +115,14 @@ const stateExamPdfKnowledgePercent = computed(() => {
           </div>
         </div>
         <div class="dashboard-feature__actions">
+          <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id, autostart: 'variant48' } }">
+            <el-button type="success" plain :icon="EditPen">Вариант 48: {{ stateExamPdfVariantQuestionCount }}</el-button>
+          </RouterLink>
           <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id, autostart: 'single' } }">
-            <el-button type="primary" plain :icon="EditPen">Пройти 1 раз</el-button>
+            <el-button type="primary" plain :icon="EditPen">Случайные {{ stateExamPdfRandomQuestionCount }}</el-button>
+          </RouterLink>
+          <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id, autostart: 'full' } }">
+            <el-button plain :icon="EditPen">Все вопросы: {{ stateExamPdfFullQuestionCount }}</el-button>
           </RouterLink>
           <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id, autostart: 'memorize' } }">
             <el-button type="warning" plain :icon="EditPen">Заучивать циклом</el-button>

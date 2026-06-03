@@ -383,6 +383,7 @@ export const useExamStore = defineStore('exam', {
       sectionId: string | 'all',
       selectionMode: QuestionSelectionMode = 'adaptive',
       questionScopeId?: string,
+      questionLimit?: number,
     ) {
       const availableQuestionsCount = this.getQuestionsForSection(sectionId, {
         ownerId,
@@ -394,21 +395,24 @@ export const useExamStore = defineStore('exam', {
         return availableQuestionsCount
       }
 
-      return Math.min(availableQuestionsCount, MAX_QUESTIONS_PER_TEST)
+      return Math.min(availableQuestionsCount, questionLimit ?? MAX_QUESTIONS_PER_TEST)
     },
     generateQuestionSet(
       ownerId: string,
       sectionId: string | 'all',
       selectionMode: QuestionSelectionMode = 'adaptive',
       questionScopeId?: string,
+      questionLimit?: number,
     ) {
+      const limit = questionLimit ?? MAX_QUESTIONS_PER_TEST
+
       if (sectionId !== 'all') {
         const questions = this.getQuestionsForSection(sectionId, {
           ownerId,
           includeMastered: false,
           questionScopeId,
         })
-        return sampleQuestions(questions, Math.min(questions.length, MAX_QUESTIONS_PER_TEST))
+        return sampleQuestions(questions, Math.min(questions.length, limit))
       }
 
       const sectionPools = this.sections
@@ -425,10 +429,10 @@ export const useExamStore = defineStore('exam', {
         .sort((left, right) => left.order - right.order)
 
       if (selectionMode === 'balanced') {
-        return buildBalancedQuestionSet(sectionPools)
+        return buildBalancedQuestionSet(sectionPools, limit)
       }
 
-      return buildAdaptiveQuestionSet(sectionPools)
+      return buildAdaptiveQuestionSet(sectionPools, limit)
     },
     startAttempt(
       ownerId: string,
@@ -438,6 +442,7 @@ export const useExamStore = defineStore('exam', {
       selectionMode: QuestionSelectionMode = 'adaptive',
       questionScopeId?: string,
       customQuestionIds?: string[],
+      questionLimit?: number,
     ) {
       this.attempts
         .filter((attempt) => attempt.ownerId === ownerId && attempt.status === 'active')
@@ -452,6 +457,7 @@ export const useExamStore = defineStore('exam', {
         ownerId,
         sectionId,
         questionScopeId,
+        questionLimit,
         mode: selectionMode === 'memorize' ? 'immediate' : mode,
         difficulty,
         selectionMode,
@@ -478,7 +484,7 @@ export const useExamStore = defineStore('exam', {
           ? customQuestionIds
               .map((questionId) => this.questionById(questionId))
               .filter((question): question is ExamQuestion => Boolean(question))
-          : this.generateQuestionSet(ownerId, sectionId, selectionMode, questionScopeId)
+          : this.generateQuestionSet(ownerId, sectionId, selectionMode, questionScopeId, questionLimit)
 
         if (questions.length === 0) {
           return null

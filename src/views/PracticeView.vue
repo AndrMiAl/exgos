@@ -85,14 +85,38 @@ const stateExamPdfSummary = computed(() =>
     ? examStore.getQuestionPoolSummary(ownerId.value, 'all', stateExamPdfScope.id)
     : { totalQuestions: 0, availableQuestions: 0, masteredQuestions: 0 },
 )
+const stateExamPdfVariantQuestionCount = computed(() =>
+  stateExamPdfScope ? examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'balanced', stateExamPdfScope.id, 48) : 0,
+)
 const stateExamPdfAdaptiveQuestionCount = computed(() =>
   stateExamPdfScope ? examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'adaptive', stateExamPdfScope.id) : 0,
 )
+const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.availableQuestions)
 const stateExamPdfMemorizeQuestionCount = computed(() =>
   stateExamPdfScope ? examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'memorize', stateExamPdfScope.id) : 0,
 )
 const isStateExamPdfPresetActive = computed(() => Boolean(stateExamPdfScope && route.query.preset === stateExamPdfScope.id))
 const practiceThemeClass = computed(() => (themeStore.isDark ? 'practice-page--dark' : 'practice-page--light'))
+
+const questionPromptOverrides: Record<string, string> = {
+  'section-1-q107': 'Ниже дан фрагмент кода на Python. Что будет выведено на экран?',
+  'section-1-q110': 'Что выведет следующий код с type hints?',
+  'section-1-q111': 'Что выведет следующий код с использованием collections.Counter?',
+  'section-2-q107': 'Какой результат выполнения кода обучения модели с кросс-валидацией?',
+  'section-4-q13': 'Что делает функция COALESCE()?',
+  'section-7-q28': 'Что выведет код?',
+  'section-7-q34': 'Какой результат выполнения данного кода?',
+}
+
+const questionCodeSnippets: Record<string, string> = {
+  'section-1-q107': `a = 17\nb = 6\nwhile a > 0:\n    result = a // b\n    remainder = a % b\n    a -= b\nprint(result, remainder)`,
+  'section-1-q110': `from typing import Optional\n\ndef foo(x: Optional[int] = None) -> str:\n    return str(x)\n\nprint(foo())`,
+  'section-1-q111': `from collections import Counter\n\nc = Counter('abracadabra')\nprint(c.most_common(2))`,
+  'section-2-q107': `from sklearn.model_selection import cross_val_score\nfrom sklearn.tree import DecisionTreeClassifier\nimport numpy as np\n\nX = np.array([[i] for i in range(100)])\ny = np.array([0 if i < 50 else 1 for i in range(100)])\nclf = DecisionTreeClassifier(random_state=42)\nscores = cross_val_score(clf, X, y, cv=5)\nprint(f"Folds: {len(scores)}")\nprint(f"Perfect: {all(s == 1.0 for s in scores)}")`,
+  'section-4-q13': `SELECT COALESCE(phone, 'Нет контактов')\nFROM users;`,
+  'section-7-q28': `int a = 5;\nint b = 2;\nSystem.out.println(a / b);`,
+  'section-7-q34': `Optional<String> opt = Optional.ofNullable(null);\nString result = opt.orElse("default");\nSystem.out.println(result);`,
+}
 
 function getSectionShortTitle(title: string) {
   return title.replace(/^Тема\s+\d+\.\s*/, '').replace(/:\s*100 тестовых вопросов$/, '')
@@ -250,6 +274,24 @@ const currentQuestion = computed(() => {
 
   return examStore.questionByAttemptEntry(attempt, currentQuestionEntryId.value)
 })
+const currentQuestionPrompt = computed(() => {
+  const question = currentQuestion.value
+
+  if (!question) {
+    return ''
+  }
+
+  return questionPromptOverrides[question.id] ?? question.text
+})
+const currentQuestionCodeSnippet = computed(() => {
+  const question = currentQuestion.value
+
+  if (!question) {
+    return ''
+  }
+
+  return questionCodeSnippets[question.id] ?? ''
+})
 const currentSection = computed(() => {
   if (!currentQuestion.value) {
     return null
@@ -336,6 +378,14 @@ function getAttemptSelectionLabel(attempt: TestAttempt) {
   if (attempt.questionScopeId) {
     if (attempt.selectionMode === 'memorize') {
       return 'Заучивание только по двум PDF'
+    }
+
+    if (attempt.selectionMode === 'balanced' && attempt.questionLimit === 48) {
+      return 'Вариант 48 по двум PDF'
+    }
+
+    if (attempt.questionLimit && attempt.questionLimit > 50) {
+      return 'Все вопросы из двух PDF'
     }
 
     return 'Только вопросы из двух PDF'
@@ -515,6 +565,7 @@ function launchAttempt(
   difficulty = selectedDifficulty.value,
   questionScopeId?: string,
   customQuestionIds?: string[],
+  questionLimit?: number,
 ) {
   const effectiveMode: AnswerFeedbackMode = selectionMode === 'memorize' ? 'immediate' : mode
   const attempt = examStore.startAttempt(
@@ -525,6 +576,7 @@ function launchAttempt(
     selectionMode,
     questionScopeId,
     customQuestionIds,
+    questionLimit,
   )
 
   if (!attempt) {
@@ -836,6 +888,30 @@ function startStateExamPdfAttempt() {
   launchAttempt('all', 'adaptive', selectedMode.value, selectedDifficulty.value, stateExamPdfScope.id)
 }
 
+function startBalancedStateExamPdfAttempt() {
+  if (!stateExamPdfScope) {
+    return
+  }
+
+  launchAttempt('all', 'balanced', selectedMode.value, selectedDifficulty.value, stateExamPdfScope.id, undefined, 48)
+}
+
+function startFullStateExamPdfAttempt() {
+  if (!stateExamPdfScope) {
+    return
+  }
+
+  launchAttempt(
+    'all',
+    'adaptive',
+    selectedMode.value,
+    selectedDifficulty.value,
+    stateExamPdfScope.id,
+    undefined,
+    stateExamPdfSummary.value.availableQuestions,
+  )
+}
+
 function startMemorizeStateExamPdfAttempt() {
   if (!stateExamPdfScope) {
     return
@@ -851,8 +927,12 @@ watch(
       return
     }
 
-    if (autostart === 'single') {
+    if (autostart === 'variant48') {
+      startBalancedStateExamPdfAttempt()
+    } else if (autostart === 'single') {
       startStateExamPdfAttempt()
+    } else if (autostart === 'full') {
+      startFullStateExamPdfAttempt()
     } else if (autostart === 'memorize') {
       startMemorizeStateExamPdfAttempt()
     } else {
@@ -905,6 +985,7 @@ function startIncorrectRetryAttempt() {
     attempt.difficulty ?? selectedDifficulty.value,
     attempt.questionScopeId,
     incorrectQuestionIds.value,
+    attempt.questionLimit,
   )
 }
 
@@ -915,6 +996,7 @@ function restartAttempt() {
   const difficulty = attempt?.difficulty ?? selectedDifficulty.value
   const selectionMode = attempt?.selectionMode ?? selectedSelectionMode.value
   const questionScopeId = attempt?.questionScopeId
+  const questionLimit = attempt?.questionLimit
   const customQuestionIds =
     attempt?.selectionMode === 'mistakes'
       ? attempt.questionIds
@@ -922,7 +1004,7 @@ function restartAttempt() {
           .filter((questionId): questionId is string => Boolean(questionId))
       : undefined
 
-  launchAttempt(sectionId, selectionMode, mode, difficulty, questionScopeId, customQuestionIds)
+  launchAttempt(sectionId, selectionMode, mode, difficulty, questionScopeId, customQuestionIds, questionLimit)
 }
 
 function resumeAttempt() {
@@ -1216,13 +1298,30 @@ function finishAttempt() {
           </div>
           <div class="section-option__actions">
             <el-button
+              type="success"
+              plain
+              :icon="Select"
+              :disabled="stateExamPdfVariantQuestionCount === 0"
+              @click="startBalancedStateExamPdfAttempt"
+            >
+              Вариант 48: {{ stateExamPdfVariantQuestionCount }} вопросов
+            </el-button>
+            <el-button
               type="primary"
               plain
               :icon="Select"
               :disabled="stateExamPdfAdaptiveQuestionCount === 0"
               @click="startStateExamPdfAttempt"
             >
-              Пройти 1 раз: {{ stateExamPdfAdaptiveQuestionCount }} вопросов
+              Случайные: {{ stateExamPdfAdaptiveQuestionCount }} вопросов
+            </el-button>
+            <el-button
+              plain
+              :icon="Select"
+              :disabled="stateExamPdfFullQuestionCount === 0"
+              @click="startFullStateExamPdfAttempt"
+            >
+              Все вопросы: {{ stateExamPdfFullQuestionCount }}
             </el-button>
             <el-button
               type="warning"
@@ -1340,7 +1439,8 @@ function finishAttempt() {
       <el-progress :percentage="progressPercent" :show-text="false" />
 
       <el-card shadow="never" class="question-card">
-        <h2>{{ currentQuestion.text }}</h2>
+        <h2>{{ currentQuestionPrompt }}</h2>
+        <pre v-if="currentQuestionCodeSnippet" class="question-code-block"><code>{{ currentQuestionCodeSnippet }}</code></pre>
 
         <el-radio-group
           v-model="selectedOptionId"
@@ -1884,6 +1984,23 @@ function finishAttempt() {
   gap: 12px;
   flex-wrap: wrap;
   margin: 0 auto 18px;
+}
+
+.question-code-block {
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid var(--app-border, rgba(148, 163, 184, 0.2));
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.question-code-block code {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
 }
 
 .result-summary-grid {
