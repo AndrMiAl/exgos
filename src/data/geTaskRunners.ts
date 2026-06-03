@@ -28,50 +28,27 @@ export type HtmlTaskRunner = BaseRunner & {
 export type GeTaskRunner = PythonTaskRunner | SqlTaskRunner | HtmlTaskRunner
 
 const readLargeFileStarter = `def read_large_file(file_path):
-    data = []
-    with open(file_path, 'r', encoding='utf-8') as file:
-        for line in file:
-            # TODO: process line and append to data
-            ...
-    return data
+    # TODO: read the file line by line
+    ...
 
-file_path = 'your_large_file.txt'
-data_array = read_large_file(file_path)
-print(f"Read {len(data_array)} lines.")
+# TODO: call the function and print the result
 `
 const intersectArraysStarter = `def find_intersection(arr1, arr2):
-    set_arr2 = set(arr2)
     # TODO: keep only values from arr1 that are present in arr2
     ...
 
-X = [1, 5, 9, 0]
-Y = [3, 0, 2, 9]
-print(find_intersection(X, Y))
+# TODO: call the function and print the result
 `
 const removeBracketsStarter = `def remove_text_in_brackets(text):
-    result = []
-    depth = 0
+    # TODO: remove text inside brackets
+    ...
 
-    for char in text:
-        # TODO: skip text inside brackets
-        ...
-
-    return ''.join(result)
-
-text = "Это (пример (вложенных) скобок) и еще (одни) скобки."
-print(remove_text_in_brackets(text))
+# TODO: call the function and print the result
 `
-const mod77Starter = `numbers = [77, 5, 154, -3, 8]
+const mod77Starter = `numbers = [...]
 
-filtered_numbers = filter(
-    lambda x: 10 <= abs(x) <= 99 and x % 77 == 0,
-    numbers,
-)
-squared_numbers = map(
-    lambda x: x ** 2,
-    filtered_numbers,
-)
-result = sum(squared_numbers)
+# TODO: keep only suitable numbers, square them and sum them
+result = ...
 
 print(result)
 `
@@ -88,10 +65,9 @@ const trainStarter = `class Train:
         # TODO: save type and speed in object fields
         ...
 
-my_train = Train(type="грузовой", speed=120)
-print(my_train.speed)
+# TODO: create an object and print its speed
 `
-const listComprehensionStarter = `a = [1, 2, 3, 4, 5]
+const listComprehensionStarter = `a = [...]
 
 # TODO: create a new list where each value is increased by 1
 a2 = ...
@@ -100,47 +76,16 @@ print(a2)
 `
 const checkDateStarter = `import pandas as pd
 
-data = {
-    'Date': ['2021-01-18', '2021-01-20', '2021-01-23', '2021-01-25'],
-    'event': ['fail', 'correct', 'fail', 'fail'],
-}
-df = pd.DataFrame(data)
-df['Date'] = pd.to_datetime(df['Date'])
-
-try:
-    user_date = pd.to_datetime(input("YYYY-MM-DD: ").strip())
-except ValueError:
-    print("Invalid date format")
-    raise SystemExit
-
-# TODO: print exact event or nearest date
+# TODO:
+# 1. create a DataFrame with dates and events
+# 2. read a date from input
+# 3. print the exact event or the nearest date
 `
 const readJsonStarter = `import json
 import sys
 
-def process_value(value):
-    if isinstance(value, list):
-        return ', '.join(map(str, value))
-    return str(value)
-
-def print_key_value_pairs(json_data):
-    for key, value in json_data.items():
-        print(f"{key}: {process_value(value)}")
-
-def main():
-    input_data = ''.join(sys.stdin.readlines())
-
-    try:
-        json_obj = json.loads(input_data)
-        if isinstance(json_obj, dict):
-            print_key_value_pairs(json_obj)
-        else:
-            print("Input must be a JSON object")
-    except json.JSONDecodeError:
-        print("Invalid JSON")
-
-if __name__ == "__main__":
-    main()
+# TODO: read JSON from stdin
+# TODO: if it is an object, print key: value pairs
 `
 const permutationsStarter = `class Permutations:
     def __init__(self, nums):
@@ -160,21 +105,11 @@ const permutationsStarter = `class Permutations:
         # TODO: compute median of the first elements
         ...
 
-a = Permutations([1, 2, 3])
-a.permute()
-print(a.solution)
-print(a.mediana())
+# TODO: create an object, generate permutations and print the result
 `
 const romanNumsStarter = `def cache_result(func):
-    def wrapper(self, *args, **kwargs):
-        if self.solution:
-            print("Берем число из кэша...")
-            return self.solution
-        print("Вычисляем число...")
-        result = func(self, *args, **kwargs)
-        self.solution = result
-        return result
-    return wrapper
+    # TODO: add caching for the conversion result
+    ...
 
 class Class:
     def __init__(self, num):
@@ -183,21 +118,10 @@ class Class:
 
     @cache_result
     def intToRoman(self):
-        roman_map = [
-            (1000, "M"), (900, "CM"),
-            (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"),
-            (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"),
-            (5, "V"), (4, "IV"),
-            (1, "I"),
-        ]
         # TODO: convert self.num to Roman numerals
         ...
 
-a = Class(495)
-a.intToRoman()
-print(a)
+# TODO: create an object, call the method and print the result
 `
 const countAndSayStarter = `class CountAndSay:
     def __init__(self, num):
@@ -213,18 +137,11 @@ const countAndSayStarter = `class CountAndSay:
     def __str__(self):
         return f"Result after {self.num} steps: {self.solution}"
 
-a = CountAndSay(4)
-a.countAndSay()
-print(a)
+# TODO: create an object, call the method and print the result
 `
 const removeDuplicatesStarter = `def cache_sum(func):
-    def wrapper(self, *args, **kwargs):
-        if hasattr(self, "_sum"):
-            return self._sum
-        result = func(self, *args, **kwargs)
-        self._sum = result
-        return result
-    return wrapper
+    # TODO: cache the computed sum
+    ...
 
 class Class:
     def __init__(self, nums):
@@ -240,10 +157,7 @@ class Class:
         # TODO: sum source values
         ...
 
-a = Class([0, 0, 1, 1, 1, 2, 2, 3, 3, 4])
-a.removeDuplicates()
-print(a.solution)
-print(a.all_sum())
+# TODO: create an object, call methods and print the result
 `
 const dijkstraStarter = `class Graph:
     def __init__(self):
@@ -302,17 +216,12 @@ print(fibonacci_memo(n))
 print(fibonacci_recursive(n))
 `
 const binaryHeapStarter = `def insert_into_heap(heap, new_element):
-    heap.append(new_element)
-    current_index = len(heap) - 1
-
     # TODO: sift the element up
     ...
 
     return heap
 
-heap = [1, 3, 6, 5, 9, 8]
-new_element = 4
-print(insert_into_heap(heap, new_element))
+# TODO: call the function and print the heap
 `
 const listNodeStarter = `class ListNode:
     def __init__(self, val=0, next=None):
@@ -323,13 +232,7 @@ def delete_node(head, index):
     # TODO: remove node by index
     ...
 
-head = ListNode(1, ListNode(2, ListNode(3, ListNode(4, ListNode(5)))))
-new_head = delete_node(head, 2)
-
-current = new_head
-while current:
-    print(current.val, end=" -> ")
-    current = current.next
+# TODO: create a linked list, delete a node and print the result
 `
 const convertBaseStarter = `binary_number = input().strip()
 
@@ -396,8 +299,7 @@ const bubbleSortStarter = `def bubble_sort(arr):
             break
     return arr
 
-numbers = [64, 34, 25, 12, 22, 11, 90]
-print(bubble_sort(numbers))
+# TODO: call the function and print the sorted list
 `
 const mergeSortStarter = `def merge_sort(arr):
     if len(arr) <= 1:
@@ -410,10 +312,7 @@ const mergeSortStarter = `def merge_sort(arr):
     # TODO: sort halves and merge them back
     ...
 
-numbers = [38, 27, 43, 3, 9, 82, 10]
-sorted_numbers = merge_sort(numbers.copy())
-print("Исходный массив:", numbers)
-print("Отсортированный массив:", sorted_numbers)
+# TODO: call the function and print the result
 `
 const anomalyDetectionStarter = `import pandas as pd
 from sklearn.cluster import KMeans
