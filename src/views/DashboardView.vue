@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { CircleCheck, Collection, EditPen, Medal, TrendCharts } from '@element-plus/icons-vue'
+import { CircleCheck, Collection, EditPen, Medal, Reading, TrendCharts } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useExamStore } from '@/stores/exam'
@@ -32,9 +32,14 @@ const grade = computed(() => getExamGrade(accuracy.value))
         <p class="eyebrow">Подготовка к экзамену</p>
         <h1>Рабочая панель</h1>
       </div>
-      <RouterLink to="/practice">
-        <el-button type="primary" :icon="EditPen">Перейти к решению</el-button>
-      </RouterLink>
+      <div class="button-row">
+        <RouterLink to="/tasks">
+          <el-button :icon="Reading">Задачи Python</el-button>
+        </RouterLink>
+        <RouterLink to="/practice">
+          <el-button type="primary" :icon="EditPen">Перейти к решению</el-button>
+        </RouterLink>
+      </div>
     </div>
 
     <div class="metric-grid">
@@ -56,7 +61,9 @@ const grade = computed(() => getExamGrade(accuracy.value))
       <el-card shadow="never" class="metric-card">
         <el-icon><Medal /></el-icon>
         <span>Общая оценка</span>
-        <strong v-if="totalAnswers > 0" :class="`grade-badge grade-badge--${grade.tone}`">{{ grade.label }}</strong>
+        <strong v-if="totalAnswers > 0" :class="`grade-badge grade-badge--${grade.tone}`">
+          {{ grade.label }}
+        </strong>
         <strong v-else>—</strong>
       </el-card>
     </div>
@@ -70,6 +77,22 @@ const grade = computed(() => getExamGrade(accuracy.value))
       description="На странице решения можно продолжить ее с того места, где вы остановились, или начать заново."
     />
 
+    <el-card shadow="never" class="metric-card">
+      <div class="dashboard-feature">
+        <div class="dashboard-feature__copy">
+          <p class="eyebrow">Практика по Python</p>
+          <h2>Задачи с выводом и раскрывающимися решениями</h2>
+          <p class="muted">
+            Внутри есть короткие задачи, ожидаемый вывод и код в раскрывашке, чтобы сначала
+            решать самому, а потом проверять себя.
+          </p>
+        </div>
+        <RouterLink to="/tasks">
+          <el-button :icon="Reading">Открыть задачи</el-button>
+        </RouterLink>
+      </div>
+    </el-card>
+
     <el-empty
       v-if="totalQuestions === 0"
       description="Вопросы еще не добавлены. Скелет уже готов к разделам, вариантам ответов, объяснениям и источникам."
@@ -80,3 +103,22 @@ const grade = computed(() => getExamGrade(accuracy.value))
     </el-empty>
   </section>
 </template>
+
+<style scoped>
+.dashboard-feature {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.dashboard-feature__copy {
+  max-width: 720px;
+}
+
+@media (max-width: 860px) {
+  .dashboard-feature {
+    display: grid;
+  }
+}
+</style>
