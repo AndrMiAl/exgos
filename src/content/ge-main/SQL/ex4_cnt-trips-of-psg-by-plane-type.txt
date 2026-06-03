@@ -1,0 +1,10 @@
+SELECT tb1.name,
+  tb2.plane,
+  COUNT(tb3.id_psg) AS cnt_trip
+FROM _GIA.dbo.Passenger AS tb1
+LEFT JOIN _GIA.dbo.Pass_in_trip as tb3 ON tb1.Id_psg = tb3.id_psg
+LEFT JOIN _GIA.dbo.Trip AS tb2 ON tb2.trip_no = tb3.trip_no
+GROUP BY tb1.name, tb1.Id_psg, tb2.plane
+HAVING COUNT(tb3.id_psg) <> 0
+ORDER BY tb1.name,
+  COUNT(tb3.id_psg) DESC

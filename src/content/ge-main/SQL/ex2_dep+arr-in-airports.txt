@@ -1,0 +1,24 @@
+SELECT
+    town AS Town,
+    COUNT(CASE WHEN direction = 'out' THEN 1 END) AS сnt_out,
+    COUNT(CASE WHEN direction = 'in' THEN 1 END) AS сnt_in
+FROM (
+    SELECT DISTINCT t1.town_from AS town,
+        'out' AS direction,
+        t1.trip_no,
+        t2.date_trip
+    FROM _GIA.dbo.Trip as t1
+    JOIN _GIA.dbo.Pass_in_trip as t2 ON t1.trip_no = t2.trip_no
+    WHERE MONTH(t2.date_trip) = 4 AND YEAR(t2.date_trip) = 2025
+
+    UNION
+
+    SELECT DISTINCT t1.town_to AS town,
+        'in' AS direction,
+        t1.trip_no,
+        t2.date_trip
+    FROM _GIA.dbo.Trip as t1
+    JOIN _GIA.dbo.Pass_in_trip as t2 ON t1.trip_no = t2.trip_no
+    WHERE MONTH(t2.date_trip) = 4 AND YEAR(t2.date_trip) = 2025
+) AS combined
+GROUP BY town

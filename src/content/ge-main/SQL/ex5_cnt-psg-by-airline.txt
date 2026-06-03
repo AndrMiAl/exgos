@@ -1,0 +1,14 @@
+SELECT t1.name,
+  MONTH(t2.date_trip) AS month_trip,
+  YEAR(t2.date_trip) AS year_trip,
+  COUNT(t2.id_psg) AS cnt_trip
+from _GIA.dbo.Company AS t1
+LEFT JOIN _GIA.dbo.Trip AS t3 ON t1.Id_comp = t3.id_comp
+LEFT JOIN _GIA.dbo.Pass_in_trip AS t2 ON t2.trip_no = t3.trip_no
+GROUP BY t1.name,
+  MONTH(t2.date_trip),
+  YEAR(t2.date_trip)
+HAVING COUNT(t2.id_psg) > 0
+ORDER BY month_trip ASC,
+  year_trip ASC,
+  cnt_trip DESC

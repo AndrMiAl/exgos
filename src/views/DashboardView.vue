@@ -34,7 +34,7 @@ const grade = computed(() => getExamGrade(accuracy.value))
       </div>
       <div class="button-row">
         <RouterLink to="/tasks">
-          <el-button :icon="Reading">Задачи Python</el-button>
+          <el-button :icon="Reading">Все задачи GE-main</el-button>
         </RouterLink>
         <RouterLink to="/practice">
           <el-button type="primary" :icon="EditPen">Перейти к решению</el-button>
@@ -80,15 +80,15 @@ const grade = computed(() => getExamGrade(accuracy.value))
     <el-card shadow="never" class="metric-card">
       <div class="dashboard-feature">
         <div class="dashboard-feature__copy">
-          <p class="eyebrow">Практика по Python</p>
-          <h2>Задачи с выводом и раскрывающимися решениями</h2>
+          <p class="eyebrow">Практика по всем разделам</p>
+          <h2>Задачи из Python, алгоритмов, ML, SQL и Web</h2>
           <p class="muted">
-            Внутри есть короткие задачи, ожидаемый вывод и код в раскрывашке, чтобы сначала
-            решать самому, а потом проверять себя.
+            Внутри лежат реальные практические файлы из распакованного GE-main. Можно открыть
+            раздел, посмотреть формулировку и только потом раскрыть код или запрос из архива.
           </p>
         </div>
         <RouterLink to="/tasks">
-          <el-button :icon="Reading">Открыть задачи</el-button>
+          <el-button :icon="Reading">Открыть все задачи</el-button>
         </RouterLink>
       </div>
     </el-card>

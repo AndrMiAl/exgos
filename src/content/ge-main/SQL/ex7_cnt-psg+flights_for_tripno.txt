@@ -1,0 +1,13 @@
+SELECT t1.trip_no,
+  t3.name,
+  t1.town_from,
+  t1.town_to,
+  COUNT(DISTINCT t2.date_trip) AS cnt_trip,
+  COUNT(DISTINCT t2.id_psg) AS cnt_psg
+FROM _GIA.dbo.Trip AS t1
+LEFT JOIN _GIA.dbo.Pass_in_trip AS t2 ON t1.trip_no = t2.trip_no
+LEFT JOIN _GIA.dbo.Company AS t3 ON t1.id_comp = t3.Id_comp
+GROUP BY t1.trip_no,
+  t3.name,
+  t1.town_from,
+  t1.town_to

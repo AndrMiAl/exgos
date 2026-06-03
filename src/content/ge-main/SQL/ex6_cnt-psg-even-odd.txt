@@ -1,0 +1,15 @@
+SELECT
+    t1.name AS name,
+    SUM(CASE WHEN DAY(t3.date_trip) % 2 = 0 THEN 1 ELSE 0 END) AS cnt_even,
+    SUM(CASE WHEN DAY(t3.date_trip) % 2 = 1 THEN 1 ELSE 0 END) AS cnt_odd
+FROM
+    _GIA.dbo.Company t1
+LEFT JOIN
+    _GIA.dbo.Trip t2 ON t1.id_comp = t2.id_comp
+LEFT JOIN
+    _GIA.dbo.Pass_in_trip t3 ON t2.trip_no = t3.trip_no
+GROUP BY
+    t1.name
+HAVING
+    SUM(CASE WHEN DAY(t3.date_trip) % 2 = 0 THEN 1 ELSE 0 END) > 0
+    OR SUM(CASE WHEN DAY(t3.date_trip) % 2 = 1 THEN 1 ELSE 0 END) > 0

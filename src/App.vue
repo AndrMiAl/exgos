@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { DataAnalysis, Document, EditPen, House, MoonNight, Sunny, User } from '@element-plus/icons-vue'
+import {
+  DataAnalysis,
+  Document,
+  EditPen,
+  House,
+  MoonNight,
+  Reading,
+  Sunny,
+  User,
+} from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useExamStore } from '@/stores/exam'
@@ -78,6 +87,10 @@ onBeforeUnmount(() => {
           <el-icon><Document /></el-icon>
           <span>Материалы</span>
         </el-menu-item>
+        <el-menu-item index="/tasks">
+          <el-icon><Reading /></el-icon>
+          <span>Задачи</span>
+        </el-menu-item>
         <el-menu-item index="/stats">
           <el-icon><DataAnalysis /></el-icon>
           <span>Статистика</span>
@@ -131,6 +144,10 @@ onBeforeUnmount(() => {
       <RouterLink to="/materials" class="mobile-tab" :class="{ active: activePath === '/materials' }">
         <el-icon><Document /></el-icon>
         <span>Материалы</span>
+      </RouterLink>
+      <RouterLink to="/tasks" class="mobile-tab" :class="{ active: activePath === '/tasks' }">
+        <el-icon><Reading /></el-icon>
+        <span>Задачи</span>
       </RouterLink>
       <RouterLink to="/stats" class="mobile-tab" :class="{ active: activePath === '/stats' }">
         <el-icon><DataAnalysis /></el-icon>

@@ -1,0 +1,9 @@
+SELECT DISTINCT tb1.name,
+  tb2.plane,
+  COUNT(tb3.id_psg)
+FROM _GIA.dbo.Company as tb1
+LEFT JOIN _GIA.dbo.Trip as tb2 ON tb1.id_comp = tb2.id_comp
+LEFT JOIN _GIA.dbo.Pass_in_trip as tb3 ON tb2.trip_no = tb3.trip_no
+GROUP BY tb1.name,
+  tb2.plane
+HAVING COUNT(tb3.id_psg) <> 0

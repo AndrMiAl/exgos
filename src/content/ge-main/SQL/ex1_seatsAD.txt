@@ -1,0 +1,11 @@
+SELECT tb1.name AS Name_psg,
+  tb2.name AS Name_comp,
+  tb3.date_trip + tb4.time_out AS dt_out,
+  tb4.town_from,
+  tb4.town_to
+FROM _GIA.dbo.Passenger AS tb1
+LEFT JOIN _GIA.dbo.Pass_in_trip AS tb3 ON tb1.Id_psg = tb3.id_psg
+LEFT JOIN _GIA.dbo.Trip AS tb4 ON tb3.trip_no = tb4.trip_no
+LEFT JOIN _GIA.dbo.Company AS tb2 ON tb4.id_comp = tb2.Id_comp
+WHERE tb3.place LIKE '%a'
+  OR tb3.place LIKE '%d'

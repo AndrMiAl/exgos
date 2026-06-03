@@ -1,298 +1,208 @@
 <script setup lang="ts">
-import { EditPen, House } from '@element-plus/icons-vue'
+import { reactive, ref } from 'vue'
+import { CollectionTag, EditPen, House } from '@element-plus/icons-vue'
 import { RouterLink } from 'vue-router'
 
-type TaskItem = {
-  id: number
+import { geTaskSections } from '@/data/geTasks'
+import { geTaskRunners, type GeTaskRunner } from '@/data/geTaskRunners'
+import { runPythonCode } from '@/utils/pythonRunner'
+
+type TaskSourceMap = Record<string, string>
+
+type ViewTask = {
+  id: string
+  path: string
   file: string
   title: string
   description: string[]
+  resultLabel: string
+  result: string
   exampleLabel?: string
   example?: string
-  outputLabel: string
-  output: string
+  sourceLabel: string
   solution: string
+  runner?: GeTaskRunner
 }
 
-const tasks: TaskItem[] = [
-  {
-    id: 1,
-    file: 'ex2_intersect-arrays.py',
-    title: 'Пересечение массивов',
-    description: [
-      'Написать функцию, которая находит пересечение двух массивов, причем порядок элементов должен сохраняться по первому массиву.',
-      'Для быстрого поиска второй массив нужно привести к множеству.',
-    ],
-    exampleLabel: 'Дано',
-    example: `X = [1, 5, 9, 0]
-Y = [3, 0, 2, 9]`,
-    outputLabel: 'Что должно получиться',
-    output: `[9, 0]`,
-    solution: `def find_intersection(arr1, arr2):
-    set_arr2 = set(arr2)
-    return [x for x in arr1 if x in set_arr2]
+type ViewSection = {
+  id: string
+  title: string
+  description: string
+  tasks: ViewTask[]
+}
 
-X = [1, 5, 9, 0]
-Y = [3, 0, 2, 9]
-print(find_intersection(X, Y))`,
-  },
-  {
-    id: 2,
-    file: 'ex3_remove-brackets.py',
-    title: 'Удаление текста в скобках',
-    description: [
-      'Написать функцию, которая удаляет из строки весь текст внутри круглых скобок, включая вложенные скобки.',
-      'Все символы вне скобок должны остаться.',
-    ],
-    exampleLabel: 'Для строки',
-    example: `"Это (пример (вложенных) скобок) и еще (одни) скобки."`,
-    outputLabel: 'Что должно получиться',
-    output: `Это  и еще  скобки.`,
-    solution: `def remove_text_in_brackets(text):
-    result = []
-    stack = []
+type RunState = {
+  tone: 'info' | 'success' | 'warning' | 'error'
+  title: string
+  message: string
+  stdout: string
+  stderr: string
+}
 
-    for char in text:
-        if char == '(':
-            stack.append(char)
-        elif char == ')' and stack:
-            stack.pop()
-        elif not stack:
-            result.append(char)
+const rawTaskModules = import.meta.glob('../content/ge-main/**/*.{py,txt,html}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as TaskSourceMap
 
-    return ''.join(result)
+const taskSources = Object.fromEntries(
+  Object.entries(rawTaskModules).map(([key, value]) => {
+    const normalizedPath = key.split('/ge-main/')[1]?.replace(/\\/g, '/') ?? key
+    return [normalizedPath, value]
+  }),
+)
 
-text = "Это (пример (вложенных) скобок) и еще (одни) скобки."
-print(remove_text_in_brackets(text))`,
-  },
-  {
-    id: 3,
-    file: 'ex4_found-mod-77.py',
-    title: 'Числа, кратные 77',
-    description: [
-      'Есть массив чисел.',
-      'Нужно оставить только двузначные по модулю числа.',
-      'Среди них оставить только те, которые делятся на 77.',
-      'Каждое такое число возвести в квадрат и найти сумму квадратов.',
-    ],
-    outputLabel: 'Что должно получиться',
-    output: `5929`,
-    solution: `numbers = [77, 293, 28, 242, 213, 285, 71, 286, 144, 276, 61, 298, 280, 214,
-156, 227, 228, 51, -4, 202, 58, 99, 270, 219, 94, 253, 53, 235, 9, 158, 49, 183, 166,
-205, 183, 266, 180, 6, 279, 200, 208, 231, 178, 201, 260, -35, 152, 115, 79, 284, 181,
-92, 286, 98, 271, 259, 258, 196, -8, 43, 2, 128, 143, 43, 297, 229, 60, 254, -9, 5, 187,
-220, -8, 111, 285, 5, 263, 187, 192, -9, 268, -9, 23, 71, 135, 7, -161, 65, 135, 29, 148,
-242, 33, 35, 211, 5, 161, 46, 159, 23, 169, 23, 172, 184, -7, 228, 129, 274, 73, 197,
-272, 54, 278, 26, 280, 13, 171, 2, 79, -2, 183, 10, 236, 276, 4, 29, -10, 41, 269, 94,
-279, 129, 39, 92, -63, 263, 219, 57, 18, 236, 291, 234, 10, 250, 0, 64, 172, 216, 30,
-15, 229, 205, 123, -105]
+const sections: ViewSection[] = geTaskSections.map((section) => ({
+  ...section,
+  tasks: section.tasks.map((task) => ({
+    ...task,
+    file: task.path.split('/').at(-1) ?? task.path,
+    sourceLabel: inferSourceLabel(task.path),
+    solution: taskSources[task.path] ?? 'Файл решения не найден в локальной копии GE-main.',
+    runner: geTaskRunners[task.path],
+  })),
+}))
 
-filtered_numbers = filter(lambda x: (10 <= abs(x) <= 99) and (x % 77 == 0), numbers)
-squared_numbers = map(lambda x: x ** 2, filtered_numbers)
-result = sum(squared_numbers)
+const openSections = ref(sections.map((section) => section.id))
+const codeDrafts = reactive<Record<string, string>>({})
+const stdinDrafts = reactive<Record<string, string>>({})
+const runStates = reactive<Record<string, RunState | undefined>>({})
+const runningTaskId = ref<string>('')
 
-print(result)`,
-  },
-  {
-    id: 4,
-    file: 'ex5_clock.py',
-    title: 'Часы, минуты, секунды',
-    description: [
-      'Считать целое число n — количество секунд — и перевести его в формат часы:минуты:секунды.',
-      'Минуты и секунды должны печататься двузначно.',
-    ],
-    exampleLabel: 'Для входа',
-    example: `3661`,
-    outputLabel: 'Вывод',
-    output: `1:01:01`,
-    solution: `n = int(input())
+for (const section of sections) {
+  for (const task of section.tasks) {
+    codeDrafts[task.id] = readStoredValue(getCodeKey(task.id), task.runner?.starterCode ?? '# Напиши решение здесь\n')
+    stdinDrafts[task.id] = readStoredValue(getInputKey(task.id), task.runner?.stdin ?? '')
+  }
+}
 
-hours = n // 3600
-remaining_seconds = n % 3600
-minutes = remaining_seconds // 60
-seconds = remaining_seconds % 60
+function inferSourceLabel(path: string) {
+  if (path.endsWith('.txt')) {
+    return 'Показать SQL-запрос'
+  }
 
-print(f"{hours}:{minutes:02d}:{seconds:02d}")`,
-  },
-  {
-    id: 5,
-    file: 'ex9_read-json.py',
-    title: 'Чтение JSON из stdin',
-    description: [
-      'Считать JSON из stdin.',
-      'Если это JSON-объект, вывести все пары ключ: значение.',
-      'Если значение — список, вывести его через запятую.',
-      'Если JSON некорректный, вывести сообщение об ошибке.',
-    ],
-    exampleLabel: 'Для входа',
-    example: `{"name":"Ann","skills":["Python","SQL"]}`,
-    outputLabel: 'Вывод',
-    output: `name: Ann
-skills: Python, SQL`,
-    solution: `import json
-import sys
+  if (path.endsWith('.html')) {
+    return 'Показать HTML/CSS решение'
+  }
 
-def process_value(value):
-    if isinstance(value, list):
-        return ', '.join(map(str, value))
-    return str(value)
+  return 'Показать код решения'
+}
 
-def print_key_value_pairs(json_data):
-    for key, value in json_data.items():
-        print(f"{key}: {process_value(value)}")
+function getCodeKey(taskId: string) {
+  return `ge-task-code:${taskId}`
+}
 
-input_data = ''.join(sys.stdin.readlines())
+function getInputKey(taskId: string) {
+  return `ge-task-stdin:${taskId}`
+}
 
-try:
-    json_obj = json.loads(input_data)
-    if isinstance(json_obj, dict):
-        print_key_value_pairs(json_obj)
-    else:
-        print("Входные данные должны представлять JSON-объект (словарь)")
-except json.JSONDecodeError:
-    print("Ошибка: некорректный JSON")`,
-  },
-  {
-    id: 6,
-    file: 'ex10_permutations.py',
-    title: 'Перестановки и медиана',
-    description: [
-      'Реализовать класс, который генерирует все перестановки массива через backtracking.',
-      'Сохранять перестановки в список.',
-      'Отдельно вычислять медиану первых элементов всех перестановок.',
-    ],
-    exampleLabel: 'Для массива',
-    example: `[1, 2, 3]`,
-    outputLabel: 'Что должно получиться',
-    output: `Для массива [1, 2, 3] будут такие перестановки: [[1, 2, 3], [1, 3, 2], [2, 1, 3], [2, 3, 1], [3, 2, 1], [3, 1, 2]]
-2`,
-    solution: `class Permutations:
-    def __init__(self, nums):
-        self.nums = list(nums)
-        self.solution = []
+function readStoredValue(key: string, fallback: string) {
+  try {
+    return window.localStorage.getItem(key) ?? fallback
+  } catch {
+    return fallback
+  }
+}
 
-    def permute(self):
-        self.solution = []
-        self._backtrack(0, self.nums.copy())
-        return self.solution
+function persistCode(taskId: string) {
+  try {
+    window.localStorage.setItem(getCodeKey(taskId), codeDrafts[taskId] ?? '')
+  } catch {
+    // Ignore localStorage failures.
+  }
+}
 
-    def _backtrack(self, start, current):
-        if start == len(current) - 1:
-            self.solution.append(current.copy())
-            return
+function persistInput(taskId: string) {
+  try {
+    window.localStorage.setItem(getInputKey(taskId), stdinDrafts[taskId] ?? '')
+  } catch {
+    // Ignore localStorage failures.
+  }
+}
 
-        for i in range(start, len(current)):
-            current[start], current[i] = current[i], current[start]
-            self._backtrack(start + 1, current)
-            current[start], current[i] = current[i], current[start]
+function fillWithSolution(task: ViewTask) {
+  codeDrafts[task.id] = task.solution
+  persistCode(task.id)
+}
 
-    def mediana(self):
-        if not self.solution:
-            self.permute()
+function resetDraft(task: ViewTask) {
+  codeDrafts[task.id] = task.runner?.starterCode ?? '# Напиши решение здесь\n'
+  stdinDrafts[task.id] = task.runner?.stdin ?? ''
+  persistCode(task.id)
+  persistInput(task.id)
+  runStates[task.id] = undefined
+}
 
-        first_elements = [perm[0] for perm in self.solution]
-        first_elements.sort()
-        n = len(first_elements)
+function normalizeOutput(value: string) {
+  return value.replace(/\r\n/g, '\n').trim()
+}
 
-        if n % 2 == 1:
-            return first_elements[n // 2]
-        return first_elements[n // 2 - 1]
+function buildRunMessage(stdout: string, stderr: string) {
+  if (stderr) {
+    return 'Код выполнился с ошибкой. Посмотри traceback ниже.'
+  }
 
-a = Permutations([1, 2, 3])
-a.permute()
-print(a.solution)
-print(a.mediana())`,
-  },
-  {
-    id: 7,
-    file: 'ex12_count-and-say.py',
-    title: 'Count and Say',
-    description: [
-      'Реализовать класс для последовательности count and say.',
-      'Каждый следующий шаг строится как описание предыдущего.',
-      'Например: 1 -> 11 -> 21 -> 1211.',
-    ],
-    outputLabel: 'Что должно получиться',
-    output: `Выполнение операции 4 раз дает ответ 1211
-Выполнение операции 7 раз дает ответ 13112221`,
-    solution: `class CountAndSay:
-    def __init__(self, num):
-        self.num = num
-        self.solution = ""
+  if (stdout) {
+    return 'Код выполнился. Ниже показан фактический вывод программы.'
+  }
 
-    def countAndSay(self):
-        if self.num == 1:
-            self.solution = "1"
-            return self.solution
+  return 'Код выполнился, но программа ничего не вывела.'
+}
 
-        current = "1"
-        for _ in range(1, self.num):
-            next_str = ""
-            count = 1
-            for i in range(1, len(current)):
-                if current[i] == current[i - 1]:
-                    count += 1
-                else:
-                    next_str += str(count) + current[i - 1]
-                    count = 1
-            next_str += str(count) + current[-1]
-            current = next_str
+async function executeTask(task: ViewTask, mode: 'run' | 'check') {
+  if (!task.runner || task.runner.language !== 'python') {
+    return
+  }
 
-        self.solution = current
-        return self.solution`,
-  },
-  {
-    id: 8,
-    file: 'ex13_remove-duplicates-from-array.py',
-    title: 'Удаление дублей из массива',
-    description: [
-      'Дан отсортированный массив.',
-      'Нужно оставить только уникальные элементы в исходном порядке.',
-      "Оставшиеся позиции заполнить символом '_' .",
-      'Отдельным методом посчитать сумму элементов исходного массива.',
-      'Сумма кэшируется через декоратор.',
-    ],
-    exampleLabel: 'Для массива',
-    example: `[0, 0, 1, 1, 1, 2, 2, 3, 3, 4]`,
-    outputLabel: 'Что должно получиться',
-    output: `После преобразования массив [0, 0, 1, 1, 1, 2, 2, 3, 3, 4] будет выглядеть так: [0, 1, 2, 3, 4, '_', '_', '_', '_', '_']
-17`,
-    solution: `class Class:
-    def __init__(self, nums):
-        self.nums = nums[:]
-        self.solution = []
+  runningTaskId.value = task.id
+  runStates[task.id] = {
+    tone: 'info',
+    title: 'Подготавливаем запуск',
+    message: 'Если Python запускается впервые, браузер может подгружать интерпретатор несколько секунд.',
+    stdout: '',
+    stderr: '',
+  }
 
-    def removeDuplicates(self):
-        if not self.nums:
-            self.solution = []
-            return
+  const result = await runPythonCode(codeDrafts[task.id] ?? '', stdinDrafts[task.id] ?? '')
+  const normalizedStdout = normalizeOutput(result.stdout)
+  const expectedOutput = task.runner.expectedStdout ? normalizeOutput(task.runner.expectedStdout) : ''
 
-        unique = [self.nums[0]]
-        for num in self.nums[1:]:
-            if num != unique[-1]:
-                unique.append(num)
+  if (mode === 'check' && task.runner.expectedStdout) {
+    const isCorrect = result.status === 'ok' && normalizedStdout === expectedOutput
 
-        fill_count = len(self.nums) - len(unique)
-        self.solution = unique + ['_'] * fill_count
+    runStates[task.id] = {
+      tone: isCorrect ? 'success' : 'warning',
+      title: isCorrect ? 'Верно' : 'Пока не совпало',
+      message: isCorrect
+        ? 'Вывод совпал с ожидаемым результатом.'
+        : 'Фактический вывод не совпал с ожидаемым. Сверь код, входные данные и формат печати.',
+      stdout: result.stdout,
+      stderr: result.stderr,
+    }
+  } else {
+    runStates[task.id] = {
+      tone: result.status === 'ok' ? 'success' : 'error',
+      title: result.status === 'ok' ? 'Код запущен' : 'Ошибка выполнения',
+      message: buildRunMessage(result.stdout, result.stderr),
+      stdout: result.stdout,
+      stderr: result.stderr,
+    }
+  }
 
-    def all_sum(self):
-        total = 0
-        for num in self.nums:
-            total += num
-        return total`,
-  },
-]
+  runningTaskId.value = ''
+}
 </script>
 
 <template>
   <section class="page">
     <div class="page-heading">
       <div>
-        <p class="eyebrow">Практика по Python</p>
+        <p class="eyebrow">Практика по всем разделам</p>
         <h1>Задачи из GE-main</h1>
         <p class="muted">
-          Здесь уже не короткие заготовки, а более близкие к архиву задачи: с нормальной
-          постановкой, ожидаемым результатом и раскрывающимся решением.
+          Здесь собраны практические задачи не только по Python, но и по алгоритмам, ML, SQL и
+          Web. Для чистых Python-задач и части алгоритмов снизу есть запуск и проверка прямо в
+          браузере.
         </p>
       </div>
       <div class="button-row">
@@ -310,54 +220,201 @@ print(a.mediana())`,
       show-icon
       :closable="false"
       title="Как пользоваться"
-      description="Сначала смотри условие и ожидаемый результат, а код решения открывай только после своей попытки."
+      description="Открывай нужный раздел, читай формулировку, потом решай сам. Для Python и части алгоритмов можно написать код снизу, запустить его и проверить вывод."
     />
 
-    <div class="section-stack tasks-stack">
-      <el-card v-for="task in tasks" :key="task.id" shadow="never" class="task-card">
-        <template #header>
-          <div class="task-card__header">
+    <el-collapse v-model="openSections" class="stats-collapse task-sections">
+      <el-collapse-item v-for="section in sections" :key="section.id" :name="section.id">
+        <template #title>
+          <div class="task-section-title">
             <div>
-              <p class="task-card__index">Задача {{ task.id }}</p>
-              <h2>{{ task.title }}</h2>
+              <strong>{{ section.title }}</strong>
+              <span>{{ section.description }}</span>
             </div>
-            <el-tag effect="plain" type="primary">{{ task.file }}</el-tag>
+            <el-tag effect="plain" type="primary">{{ section.tasks.length }} задач</el-tag>
           </div>
         </template>
 
-        <div class="task-card__content">
-          <div class="task-card__block">
-            <h3>Что нужно сделать</h3>
-            <ul class="task-list">
-              <li v-for="item in task.description" :key="item">{{ item }}</li>
-            </ul>
-          </div>
+        <div class="section-stack tasks-stack">
+          <el-card v-for="task in section.tasks" :key="task.id" shadow="never" class="task-card">
+            <template #header>
+              <div class="task-card__header">
+                <div>
+                  <p class="task-card__index">{{ section.title }}</p>
+                  <h2>{{ task.title }}</h2>
+                </div>
+                <el-tag effect="dark" type="primary">{{ task.file }}</el-tag>
+              </div>
+            </template>
 
-          <div v-if="task.example" class="task-card__block">
-            <h3>{{ task.exampleLabel }}</h3>
-            <pre class="task-code"><code>{{ task.example }}</code></pre>
-          </div>
+            <div class="task-card__content">
+              <div class="task-card__block">
+                <h3>Что нужно сделать</h3>
+                <ul class="task-list">
+                  <li v-for="item in task.description" :key="item">{{ item }}</li>
+                </ul>
+              </div>
 
-          <div class="task-card__block">
-            <h3>{{ task.outputLabel }}</h3>
-            <pre class="task-code"><code>{{ task.output }}</code></pre>
-          </div>
+              <div v-if="task.example" class="task-card__block">
+                <h3>{{ task.exampleLabel }}</h3>
+                <pre class="task-code"><code>{{ task.example }}</code></pre>
+              </div>
 
-          <el-collapse class="task-card__collapse">
-            <el-collapse-item :name="`solution-${task.id}`">
-              <template #title>
-                <span class="task-card__collapse-title">Показать решение</span>
-              </template>
-              <pre class="task-code task-code--solution"><code>{{ task.solution }}</code></pre>
-            </el-collapse-item>
-          </el-collapse>
+              <div class="task-card__block">
+                <h3>{{ task.resultLabel }}</h3>
+                <pre class="task-code"><code>{{ task.result }}</code></pre>
+              </div>
+
+              <el-collapse class="task-card__collapse">
+                <el-collapse-item :name="`${task.id}-solution`">
+                  <template #title>
+                    <span class="task-card__collapse-title">{{ task.sourceLabel }}</span>
+                  </template>
+                  <pre class="task-code task-code--solution"><code>{{ task.solution }}</code></pre>
+                </el-collapse-item>
+              </el-collapse>
+
+              <div v-if="task.runner" class="task-runner">
+                <div class="task-runner__header">
+                  <div>
+                    <h3>Проверка решения</h3>
+                    <p class="muted">
+                      Код выполняется в браузере через Python-интерпретатор. Сервер ничего не
+                      исполняет.
+                    </p>
+                  </div>
+                  <el-tag type="success" effect="plain">Python в браузере</el-tag>
+                </div>
+
+                <div class="task-card__block">
+                  <h3>Твой код</h3>
+                  <el-input
+                    v-model="codeDrafts[task.id]"
+                    type="textarea"
+                    :rows="12"
+                    resize="vertical"
+                    class="task-editor"
+                    @update:model-value="persistCode(task.id)"
+                  />
+                </div>
+
+                <div v-if="task.runner.stdin !== undefined" class="task-card__block">
+                  <h3>Входные данные</h3>
+                  <el-input
+                    v-model="stdinDrafts[task.id]"
+                    type="textarea"
+                    :rows="4"
+                    resize="vertical"
+                    @update:model-value="persistInput(task.id)"
+                  />
+                </div>
+
+                <div class="button-row">
+                  <el-button @click="fillWithSolution(task)">Подставить исходник</el-button>
+                  <el-button @click="resetDraft(task)">Очистить</el-button>
+                  <el-button :loading="runningTaskId === task.id" @click="executeTask(task, 'run')">
+                    Запустить код
+                  </el-button>
+                  <el-button
+                    v-if="task.runner.expectedStdout"
+                    type="primary"
+                    :loading="runningTaskId === task.id"
+                    @click="executeTask(task, 'check')"
+                  >
+                    Проверить
+                  </el-button>
+                </div>
+
+                <el-alert
+                  v-if="!task.runner.expectedStdout"
+                  type="warning"
+                  show-icon
+                  :closable="false"
+                  title="Автопроверка не настроена"
+                  description="Для этой задачи можно запустить код и посмотреть результат, но точное сравнение вывода пока отключено."
+                />
+
+                <div v-if="runStates[task.id]" class="task-runner__result">
+                  <el-alert
+                    :type="runStates[task.id]?.tone ?? 'info'"
+                    show-icon
+                    :closable="false"
+                    :title="runStates[task.id]?.title"
+                    :description="runStates[task.id]?.message"
+                  />
+
+                  <div v-if="runStates[task.id]?.stdout" class="task-card__block">
+                    <h3>Вывод программы</h3>
+                    <pre class="task-code"><code>{{ runStates[task.id]?.stdout }}</code></pre>
+                  </div>
+
+                  <div v-if="runStates[task.id]?.stderr" class="task-card__block">
+                    <h3>Ошибки / traceback</h3>
+                    <pre class="task-code task-code--error"><code>{{ runStates[task.id]?.stderr }}</code></pre>
+                  </div>
+                </div>
+              </div>
+
+              <el-alert
+                v-else
+                type="info"
+                show-icon
+                :closable="false"
+                title="Запуск пока не подключен"
+                description="Для SQL, Web и ML здесь пока оставлен только разбор условий и исходники из архива. Автозапуск включен для Python-задач и части алгоритмов."
+              />
+            </div>
+          </el-card>
         </div>
-      </el-card>
-    </div>
+      </el-collapse-item>
+    </el-collapse>
+
+    <el-card shadow="never" class="task-help-card">
+      <div class="task-help-card__content">
+        <div>
+          <p class="eyebrow">Быстрый ориентир</p>
+          <h2>Что именно здесь собрано</h2>
+          <p class="muted">
+            Python, Алгоритмы, ML, SQL и Web из распакованного GE-main. Страница теперь работает
+            как практический банк: читаешь задачу, смотришь ожидаемый результат и ниже пробуешь
+            написать решение сам.
+          </p>
+        </div>
+        <el-icon><CollectionTag /></el-icon>
+      </div>
+    </el-card>
   </section>
 </template>
 
 <style scoped>
+.task-sections {
+  overflow: hidden;
+}
+
+.task-section-title {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-right: 16px;
+}
+
+.task-section-title strong {
+  display: block;
+  color: var(--app-text-strong);
+  font-size: 18px;
+}
+
+.task-section-title span {
+  display: block;
+  margin-top: 6px;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
 .tasks-stack {
   gap: 18px;
 }
@@ -386,7 +443,8 @@ print(a.mediana())`,
   gap: 10px;
 }
 
-.task-card__block h3 {
+.task-card__block h3,
+.task-runner__header h3 {
   margin: 0;
   color: var(--app-text-strong);
   font-size: 16px;
@@ -420,6 +478,10 @@ print(a.mediana())`,
   margin-top: 6px;
 }
 
+.task-code--error {
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
 .task-card__collapse {
   border: 1px solid var(--app-border);
   border-radius: 12px;
@@ -444,8 +506,50 @@ print(a.mediana())`,
   color: inherit;
 }
 
+.task-runner {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  padding: 18px;
+  background: var(--app-surface-soft);
+}
+
+.task-runner__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.task-runner__result {
+  display: grid;
+  gap: 14px;
+}
+
+.task-editor :deep(textarea) {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.task-help-card__content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.task-help-card__content .el-icon {
+  color: var(--accent);
+  font-size: 32px;
+}
+
 @media (max-width: 860px) {
-  .task-card__header {
+  .task-section-title,
+  .task-card__header,
+  .task-help-card__content,
+  .task-runner__header {
     display: grid;
   }
 }
