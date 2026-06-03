@@ -3,9 +3,11 @@ import { reactive, ref } from 'vue'
 import { CollectionTag, EditPen, House } from '@element-plus/icons-vue'
 import { RouterLink } from 'vue-router'
 
+import { geSqlScenarios } from '@/data/geSqlScenarios'
 import { geTaskSections } from '@/data/geTasks'
 import { geTaskRunners, type GeTaskRunner } from '@/data/geTaskRunners'
 import { runPythonCode } from '@/utils/pythonRunner'
+import { compareSqlResults, runSqlQuery } from '@/utils/sqlRunner'
 
 type TaskSourceMap = Record<string, string>
 
@@ -31,12 +33,20 @@ type ViewSection = {
   tasks: ViewTask[]
 }
 
+type TableRows = Array<Array<string | number | null>>
+
 type RunState = {
   tone: 'info' | 'success' | 'warning' | 'error'
   title: string
   message: string
-  stdout: string
-  stderr: string
+  stdout?: string
+  stderr?: string
+  expectedText?: string
+  columns?: string[]
+  rows?: TableRows
+  expectedColumns?: string[]
+  expectedRows?: TableRows
+  htmlPreview?: string
 }
 
 const rawTaskModules = import.meta.glob('../content/ge-main/**/*.{py,txt,html}', {
@@ -67,12 +77,12 @@ const openSections = ref(sections.map((section) => section.id))
 const codeDrafts = reactive<Record<string, string>>({})
 const stdinDrafts = reactive<Record<string, string>>({})
 const runStates = reactive<Record<string, RunState | undefined>>({})
-const runningTaskId = ref<string>('')
+const runningTaskId = ref('')
 
 for (const section of sections) {
   for (const task of section.tasks) {
-    codeDrafts[task.id] = readStoredValue(getCodeKey(task.id), task.runner?.starterCode ?? '# Напиши решение здесь\n')
-    stdinDrafts[task.id] = readStoredValue(getInputKey(task.id), task.runner?.stdin ?? '')
+    codeDrafts[task.id] = readStoredValue(getCodeKey(task.id), getStarterCode(task))
+    stdinDrafts[task.id] = readStoredValue(getInputKey(task.id), getPythonRunner(task)?.stdin ?? '')
   }
 }
 
@@ -120,14 +130,18 @@ function persistInput(taskId: string) {
   }
 }
 
+function getStarterCode(task: ViewTask) {
+  return task.runner?.starterCode ?? '# Напиши решение здесь\n'
+}
+
 function fillWithSolution(task: ViewTask) {
   codeDrafts[task.id] = task.solution
   persistCode(task.id)
 }
 
 function resetDraft(task: ViewTask) {
-  codeDrafts[task.id] = task.runner?.starterCode ?? '# Напиши решение здесь\n'
-  stdinDrafts[task.id] = task.runner?.stdin ?? ''
+  codeDrafts[task.id] = getStarterCode(task)
+  stdinDrafts[task.id] = getPythonRunner(task)?.stdin ?? ''
   persistCode(task.id)
   persistInput(task.id)
   runStates[task.id] = undefined
@@ -137,7 +151,7 @@ function normalizeOutput(value: string) {
   return value.replace(/\r\n/g, '\n').trim()
 }
 
-function buildRunMessage(stdout: string, stderr: string) {
+function buildPythonRunMessage(stdout: string, stderr: string) {
   if (stderr) {
     return 'Код выполнился с ошибкой. Посмотри traceback ниже.'
   }
@@ -149,25 +163,145 @@ function buildRunMessage(stdout: string, stderr: string) {
   return 'Код выполнился, но программа ничего не вывела.'
 }
 
+function getPythonRunner(task: ViewTask) {
+  return task.runner?.language === 'python' ? task.runner : undefined
+}
+
+function getSqlRunner(task: ViewTask) {
+  return task.runner?.language === 'sql' ? task.runner : undefined
+}
+
+function getHtmlRunner(task: ViewTask) {
+  return task.runner?.language === 'html' ? task.runner : undefined
+}
+
+function hasCheck(task: ViewTask) {
+  return task.runner?.language === 'sql' || (task.runner?.language === 'python' && Boolean(task.runner.expectedStdout))
+}
+
+function runnerBadge(task: ViewTask) {
+  if (task.runner?.language === 'sql') {
+    return 'SQL-база'
+  }
+
+  if (task.runner?.language === 'html') {
+    return 'HTML-превью'
+  }
+
+  if (task.runner?.language === 'python') {
+    if (task.path.startsWith('ML/')) {
+      return 'ML в браузере'
+    }
+
+    return 'Python в браузере'
+  }
+
+  return ''
+}
+
+function runnerTitle(task: ViewTask) {
+  if (task.runner?.language === 'sql') {
+    return 'Проверка SQL-запроса'
+  }
+
+  if (task.runner?.language === 'html') {
+    return 'Живой рендер HTML/CSS'
+  }
+
+  return 'Проверка решения'
+}
+
+function runnerDescription(task: ViewTask) {
+  if (task.runner?.language === 'sql') {
+    return 'Запрос выполняется на учебной базе прямо в браузере. Для проверки результат сравнивается с эталонным SQL из архива.'
+  }
+
+  if (task.runner?.language === 'html') {
+    return 'Редактируй HTML/CSS снизу и сразу смотри, как страница выглядит в iframe-превью.'
+  }
+
+  if (task.path.startsWith('ML/')) {
+    return 'ML-скрипт выполняется в браузере. Для запуска уже подложены учебные данные и заглушка для графиков.'
+  }
+
+  return 'Код выполняется в браузере через Python-интерпретатор. Сервер ничего не исполняет.'
+}
+
+function sqlScenario(task: ViewTask) {
+  const runner = getSqlRunner(task)
+  return runner ? geSqlScenarios[runner.scenarioId] : undefined
+}
+
 async function executeTask(task: ViewTask, mode: 'run' | 'check') {
-  if (!task.runner || task.runner.language !== 'python') {
+  const runner = task.runner
+
+  if (!runner) {
     return
   }
 
   runningTaskId.value = task.id
+
+  if (runner.language === 'html') {
+    runStates[task.id] = {
+      tone: 'success',
+      title: 'Превью обновлено',
+      message: 'Ниже показан текущий рендер HTML/CSS из редактора.',
+      htmlPreview: codeDrafts[task.id] ?? '',
+    }
+    runningTaskId.value = ''
+    return
+  }
+
+  if (runner.language === 'sql') {
+    if (mode === 'check') {
+      const checked = compareSqlResults(codeDrafts[task.id] ?? '', task.solution, runner.scenarioId)
+      runStates[task.id] = {
+        tone: checked.isCorrect ? 'success' : 'warning',
+        title: checked.isCorrect ? 'Верно' : 'Пока не совпало',
+        message: checked.message,
+        columns: checked.actual.columns,
+        rows: checked.actual.rows,
+        expectedColumns: checked.expected.columns,
+        expectedRows: checked.expected.rows,
+        stderr: checked.actual.status === 'error' ? checked.actual.stderr : checked.expected.status === 'error' ? checked.expected.stderr : '',
+      }
+    } else {
+      const result = runSqlQuery(codeDrafts[task.id] ?? '', runner.scenarioId)
+      runStates[task.id] = {
+        tone: result.status === 'ok' ? 'success' : 'error',
+        title: result.status === 'ok' ? 'SQL выполнен' : 'Ошибка SQL',
+        message:
+          result.status === 'ok'
+            ? 'Запрос выполнился на учебной базе. Ниже показан набор строк, который он вернул.'
+            : 'Запрос не выполнился. Исправь синтаксис и попробуй снова.',
+        columns: result.columns,
+        rows: result.rows,
+        stderr: result.stderr,
+      }
+    }
+
+    runningTaskId.value = ''
+    return
+  }
+
   runStates[task.id] = {
     tone: 'info',
     title: 'Подготавливаем запуск',
-    message: 'Если Python запускается впервые, браузер может подгружать интерпретатор несколько секунд.',
-    stdout: '',
-    stderr: '',
+    message:
+      task.path.startsWith('ML/')
+        ? 'Если ML-скрипт запускается впервые, браузер может подгружать Python-пакеты несколько секунд.'
+        : 'Если Python запускается впервые, браузер может подгружать интерпретатор несколько секунд.',
   }
 
-  const result = await runPythonCode(codeDrafts[task.id] ?? '', stdinDrafts[task.id] ?? '')
-  const normalizedStdout = normalizeOutput(result.stdout)
-  const expectedOutput = task.runner.expectedStdout ? normalizeOutput(task.runner.expectedStdout) : ''
+  const result = await runPythonCode(codeDrafts[task.id] ?? '', {
+    stdin: stdinDrafts[task.id] ?? '',
+    setupCode: runner.setupCode,
+  })
 
-  if (mode === 'check' && task.runner.expectedStdout) {
+  const normalizedStdout = normalizeOutput(result.stdout)
+  const expectedOutput = runner.expectedStdout ? normalizeOutput(runner.expectedStdout) : ''
+
+  if (mode === 'check' && runner.expectedStdout) {
     const isCorrect = result.status === 'ok' && normalizedStdout === expectedOutput
 
     runStates[task.id] = {
@@ -178,12 +312,13 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
         : 'Фактический вывод не совпал с ожидаемым. Сверь код, входные данные и формат печати.',
       stdout: result.stdout,
       stderr: result.stderr,
+      expectedText: runner.expectedStdout,
     }
   } else {
     runStates[task.id] = {
       tone: result.status === 'ok' ? 'success' : 'error',
       title: result.status === 'ok' ? 'Код запущен' : 'Ошибка выполнения',
-      message: buildRunMessage(result.stdout, result.stderr),
+      message: buildPythonRunMessage(result.stdout, result.stderr),
       stdout: result.stdout,
       stderr: result.stderr,
     }
@@ -200,9 +335,9 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
         <p class="eyebrow">Практика по всем разделам</p>
         <h1>Задачи из GE-main</h1>
         <p class="muted">
-          Здесь собраны практические задачи не только по Python, но и по алгоритмам, ML, SQL и
-          Web. Для чистых Python-задач и части алгоритмов снизу есть запуск и проверка прямо в
-          браузере.
+          Здесь собраны практические задачи по Python, алгоритмам, ML, SQL и Web. Для Python и ML код
+          выполняется прямо в браузере, для SQL используется учебная база, а для Web можно сразу рендерить
+          HTML/CSS и смотреть превью.
         </p>
       </div>
       <div class="button-row">
@@ -220,7 +355,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
       show-icon
       :closable="false"
       title="Как пользоваться"
-      description="Открывай нужный раздел, читай формулировку, потом решай сам. Для Python и части алгоритмов можно написать код снизу, запустить его и проверить вывод."
+      description="Открывай нужный раздел, читай формулировку, потом решай сам. Python и ML запускаются в браузере, SQL сверяется на учебной базе, а Web можно сразу смотреть в превью."
     />
 
     <el-collapse v-model="openSections" class="stats-collapse task-sections">
@@ -271,34 +406,49 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                     <span class="task-card__collapse-title">{{ task.sourceLabel }}</span>
                   </template>
                   <pre class="task-code task-code--solution"><code>{{ task.solution }}</code></pre>
+
+                  <div v-if="getHtmlRunner(task)" class="task-card__block">
+                    <h3>Эталонный рендер</h3>
+                    <iframe class="task-preview" :srcdoc="task.solution" title="Эталонный HTML-рендер" />
+                  </div>
                 </el-collapse-item>
               </el-collapse>
 
               <div v-if="task.runner" class="task-runner">
                 <div class="task-runner__header">
                   <div>
-                    <h3>Проверка решения</h3>
-                    <p class="muted">
-                      Код выполняется в браузере через Python-интерпретатор. Сервер ничего не
-                      исполняет.
-                    </p>
+                    <h3>{{ runnerTitle(task) }}</h3>
+                    <p class="muted">{{ runnerDescription(task) }}</p>
+                    <p v-if="task.runner.note" class="task-runner__note">{{ task.runner.note }}</p>
                   </div>
-                  <el-tag type="success" effect="plain">Python в браузере</el-tag>
+                  <el-tag type="success" effect="plain">{{ runnerBadge(task) }}</el-tag>
+                </div>
+
+                <div v-if="getSqlRunner(task) && sqlScenario(task)" class="task-card__block">
+                  <h3>{{ sqlScenario(task)?.title }}</h3>
+                  <p class="muted">{{ sqlScenario(task)?.description }}</p>
+                  <ul class="task-list task-list--compact">
+                    <li v-for="line in sqlScenario(task)?.schema" :key="line">
+                      <code>{{ line }}</code>
+                    </li>
+                  </ul>
                 </div>
 
                 <div class="task-card__block">
-                  <h3>Твой код</h3>
+                  <h3 v-if="getSqlRunner(task)">Твой SQL</h3>
+                  <h3 v-else-if="getHtmlRunner(task)">Твой HTML/CSS</h3>
+                  <h3 v-else>Твой код</h3>
                   <el-input
                     v-model="codeDrafts[task.id]"
                     type="textarea"
-                    :rows="12"
+                    :rows="task.runner.language === 'html' ? 18 : 12"
                     resize="vertical"
                     class="task-editor"
                     @update:model-value="persistCode(task.id)"
                   />
                 </div>
 
-                <div v-if="task.runner.stdin !== undefined" class="task-card__block">
+                <div v-if="getPythonRunner(task)?.stdin !== undefined" class="task-card__block">
                   <h3>Входные данные</h3>
                   <el-input
                     v-model="stdinDrafts[task.id]"
@@ -313,10 +463,10 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                   <el-button @click="fillWithSolution(task)">Подставить исходник</el-button>
                   <el-button @click="resetDraft(task)">Очистить</el-button>
                   <el-button :loading="runningTaskId === task.id" @click="executeTask(task, 'run')">
-                    Запустить код
+                    {{ getHtmlRunner(task) ? 'Показать превью' : getSqlRunner(task) ? 'Выполнить SQL' : 'Запустить код' }}
                   </el-button>
                   <el-button
-                    v-if="task.runner.expectedStdout"
+                    v-if="hasCheck(task)"
                     type="primary"
                     :loading="runningTaskId === task.id"
                     @click="executeTask(task, 'check')"
@@ -324,15 +474,6 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                     Проверить
                   </el-button>
                 </div>
-
-                <el-alert
-                  v-if="!task.runner.expectedStdout"
-                  type="warning"
-                  show-icon
-                  :closable="false"
-                  title="Автопроверка не настроена"
-                  description="Для этой задачи можно запустить код и посмотреть результат, но точное сравнение вывода пока отключено."
-                />
 
                 <div v-if="runStates[task.id]" class="task-runner__result">
                   <el-alert
@@ -343,9 +484,75 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                     :description="runStates[task.id]?.message"
                   />
 
+                  <div v-if="runStates[task.id]?.htmlPreview" class="task-card__block">
+                    <h3>Превью</h3>
+                    <iframe
+                      class="task-preview"
+                      :srcdoc="runStates[task.id]?.htmlPreview ?? ''"
+                      title="Превью HTML-задачи"
+                    />
+                  </div>
+
+                  <div v-if="runStates[task.id]?.columns?.length && runStates[task.id]?.rows" class="task-card__block">
+                    <h3>Фактический результат</h3>
+                    <div class="table-shell">
+                      <table class="task-table">
+                        <thead>
+                          <tr>
+                            <th v-for="column in runStates[task.id]?.columns" :key="column">{{ column }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-if="(runStates[task.id]?.rows?.length ?? 0) === 0">
+                            <td :colspan="runStates[task.id]?.columns?.length ?? 1">Запрос вернул 0 строк</td>
+                          </tr>
+                          <tr v-for="(row, rowIndex) in runStates[task.id]?.rows" :key="`${task.id}-row-${rowIndex}`">
+                            <td v-for="(cell, cellIndex) in row" :key="`${task.id}-cell-${rowIndex}-${cellIndex}`">
+                              {{ cell }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="runStates[task.id]?.expectedColumns?.length && runStates[task.id]?.expectedRows"
+                    class="task-card__block"
+                  >
+                    <h3>Эталонный результат</h3>
+                    <div class="table-shell">
+                      <table class="task-table">
+                        <thead>
+                          <tr>
+                            <th v-for="column in runStates[task.id]?.expectedColumns" :key="column">{{ column }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr
+                            v-for="(row, rowIndex) in runStates[task.id]?.expectedRows"
+                            :key="`${task.id}-expected-row-${rowIndex}`"
+                          >
+                            <td
+                              v-for="(cell, cellIndex) in row"
+                              :key="`${task.id}-expected-cell-${rowIndex}-${cellIndex}`"
+                            >
+                              {{ cell }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
                   <div v-if="runStates[task.id]?.stdout" class="task-card__block">
                     <h3>Вывод программы</h3>
                     <pre class="task-code"><code>{{ runStates[task.id]?.stdout }}</code></pre>
+                  </div>
+
+                  <div v-if="runStates[task.id]?.expectedText" class="task-card__block">
+                    <h3>Ожидаемый вывод</h3>
+                    <pre class="task-code"><code>{{ runStates[task.id]?.expectedText }}</code></pre>
                   </div>
 
                   <div v-if="runStates[task.id]?.stderr" class="task-card__block">
@@ -354,15 +561,6 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                   </div>
                 </div>
               </div>
-
-              <el-alert
-                v-else
-                type="info"
-                show-icon
-                :closable="false"
-                title="Запуск пока не подключен"
-                description="Для SQL, Web и ML здесь пока оставлен только разбор условий и исходники из архива. Автозапуск включен для Python-задач и части алгоритмов."
-              />
             </div>
           </el-card>
         </div>
@@ -375,9 +573,8 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
           <p class="eyebrow">Быстрый ориентир</p>
           <h2>Что именно здесь собрано</h2>
           <p class="muted">
-            Python, Алгоритмы, ML, SQL и Web из распакованного GE-main. Страница теперь работает
-            как практический банк: читаешь задачу, смотришь ожидаемый результат и ниже пробуешь
-            написать решение сам.
+            Python, алгоритмы, ML, SQL и Web из распакованного GE-main. Теперь страница работает как практический
+            банк: читаешь задачу, смотришь ожидаемый результат и ниже пробуешь написать решение сам.
           </p>
         </div>
         <el-icon><CollectionTag /></el-icon>
@@ -423,14 +620,21 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+}
+
+.task-card__header h2 {
+  margin: 8px 0 0;
+  font-size: 22px;
 }
 
 .task-card__index {
-  margin-bottom: 8px;
-  color: var(--app-muted);
-  font-size: 13px;
+  margin: 0;
+  color: var(--app-accent);
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .task-card__content {
@@ -438,119 +642,143 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   gap: 18px;
 }
 
-.task-card__block {
-  display: grid;
-  gap: 10px;
-}
-
-.task-card__block h3,
-.task-runner__header h3 {
-  margin: 0;
-  color: var(--app-text-strong);
+.task-card__block h3 {
+  margin: 0 0 10px;
   font-size: 16px;
 }
 
+.task-card__collapse {
+  border-top: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.task-card__collapse-title {
+  font-weight: 600;
+}
+
 .task-list {
-  display: grid;
-  gap: 8px;
   margin: 0;
-  padding-left: 20px;
+  padding-left: 18px;
   color: var(--app-text);
   line-height: 1.6;
 }
 
+.task-list--compact {
+  padding-left: 18px;
+}
+
 .task-code {
-  overflow-x: auto;
   margin: 0;
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  padding: 14px 16px;
-  background: var(--app-surface-soft);
-  color: var(--app-text-strong);
-  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
-  font-size: 14px;
+  overflow-x: auto;
+  border-radius: 16px;
+  background: rgba(12, 19, 34, 0.88);
+  padding: 16px 18px;
+  color: #f5f7ff;
+  font-size: 13px;
   line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .task-code--solution {
-  margin-top: 6px;
+  max-height: 480px;
 }
 
 .task-code--error {
-  border-color: rgba(220, 38, 38, 0.3);
-}
-
-.task-card__collapse {
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  padding: 0 16px;
-  background: var(--app-surface-soft);
-}
-
-.task-card__collapse :deep(.el-collapse-item__header),
-.task-card__collapse :deep(.el-collapse-item__wrap),
-.task-card__collapse :deep(.el-collapse-item__content) {
-  border-color: transparent;
-  background: transparent;
-}
-
-.task-card__collapse :deep(.el-collapse-item__header) {
-  min-height: 56px;
-  color: var(--app-text-strong);
-  font-weight: 700;
-}
-
-.task-card__collapse-title {
-  color: inherit;
+  color: #ffd6d6;
 }
 
 .task-runner {
   display: grid;
-  gap: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  padding: 18px;
-  background: var(--app-surface-soft);
+  gap: 18px;
+  border-top: 1px solid var(--app-border);
+  padding-top: 18px;
 }
 
 .task-runner__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
+}
+
+.task-runner__header h3 {
+  margin: 0 0 8px;
+}
+
+.task-runner__note {
+  margin: 8px 0 0;
+  color: var(--app-accent);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .task-runner__result {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .task-editor :deep(textarea) {
-  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+
+.task-preview {
+  width: 100%;
+  min-height: 320px;
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  background: white;
+}
+
+.table-shell {
+  overflow-x: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+}
+
+.task-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.task-table th,
+.task-table td {
+  border-bottom: 1px solid var(--app-border);
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: top;
+  font-size: 13px;
+}
+
+.task-table th {
+  background: rgba(72, 116, 255, 0.08);
+  color: var(--app-text-strong);
 }
 
 .task-help-card__content {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
 }
 
 .task-help-card__content .el-icon {
-  color: var(--accent);
-  font-size: 32px;
+  font-size: 48px;
+  color: var(--app-accent);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .task-section-title,
   .task-card__header,
-  .task-help-card__content,
-  .task-runner__header {
+  .task-runner__header,
+  .task-help-card__content {
     display: grid;
+  }
+
+  .task-preview {
+    min-height: 260px;
   }
 }
 </style>

@@ -10,6 +10,11 @@ export type PythonRunResult = {
   stderr: string
 }
 
+export type PythonRunOptions = {
+  stdin?: string
+  setupCode?: string
+}
+
 const PYODIDE_INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
 
 let runtimePromise: Promise<any> | null = null
@@ -66,7 +71,10 @@ export async function warmPythonRuntime() {
   return runtimePromise
 }
 
-export async function runPythonCode(code: string, stdin = ''): Promise<PythonRunResult> {
+export async function runPythonCode(code: string, options: PythonRunOptions | string = ''): Promise<PythonRunResult> {
+  const resolvedOptions = typeof options === 'string' ? { stdin: options } : options
+  const stdin = resolvedOptions.stdin ?? ''
+  const setupCode = resolvedOptions.setupCode ?? ''
   const pyodide = await warmPythonRuntime()
   const script = `
 import builtins
@@ -76,6 +84,7 @@ import sys
 import traceback
 
 _code = ${JSON.stringify(code)}
+_setup_code = ${JSON.stringify(setupCode)}
 _stdin_data = ${JSON.stringify(stdin)}
 _stdout = io.StringIO()
 _stderr = io.StringIO()
@@ -95,9 +104,12 @@ sys.stderr = _stderr
 sys.stdin = io.StringIO(_stdin_data)
 builtins.input = _patched_input
 _status = "ok"
+_globals = {"__name__": "__main__"}
 
 try:
-    exec(_code, {"__name__": "__main__"})
+    if _setup_code.strip():
+        exec(_setup_code, _globals)
+    exec(_code, _globals)
 except BaseException:
     _status = "error"
     traceback.print_exc()
@@ -115,7 +127,7 @@ json.dumps({
 `
 
   try {
-    await pyodide.loadPackagesFromImports(code)
+    await pyodide.loadPackagesFromImports(`${setupCode}\n${code}`)
     const rawResult = await pyodide.runPythonAsync(script)
     return JSON.parse(String(rawResult)) as PythonRunResult
   } catch (error) {
