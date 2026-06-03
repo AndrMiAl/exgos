@@ -29,7 +29,14 @@ export type GeTaskRunner = PythonTaskRunner | SqlTaskRunner | HtmlTaskRunner
 
 const defaultPythonStarter = '# Напиши решение здесь\n'
 const defaultSqlStarter = `-- Напиши SQL-запрос здесь
-SELECT *
+-- Можно использовать таблицы:
+-- Company(Id_comp, id_comp, name)
+-- Trip(trip_no, id_comp, town_from, town_to, plane, time_out)
+-- Passenger(Id_psg, id_psg, name)
+-- Pass_in_trip(trip_no, id_psg, date_trip, place)
+
+SELECT
+  -- перечисли нужные поля
 FROM Company;
 `
 
@@ -38,24 +45,12 @@ const taskOneHtmlStarter = `<!DOCTYPE html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Список</title>
+    <title>Задача 1</title>
     <style>
-      li {
-        margin-bottom: 10px;
-      }
-
-      li.point {
-        color: black;
-      }
-
-      li.colored_point {
-        color: red;
-      }
-
-      .list {
-        border: 2px dashed blueviolet;
-        border-radius: 8px;
-      }
+      /* TODO:
+         1. Добавь отступы между пунктами
+         2. Сделай выделенные пункты красными
+         3. Оформи рамку вокруг списка */
     </style>
   </head>
   <body>
@@ -74,19 +69,12 @@ const taskTwoHtmlStarter = `<!DOCTYPE html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Карточка товара</title>
+    <title>Задача 2</title>
     <style>
-      .card {
-        border: 2px solid #af0000;
-        border-radius: 5px;
-        padding: 30px;
-      }
-
-      .buy_button {
-        background-color: rgb(173, 173, 255);
-        padding-left: 8px;
-        padding-right: 16px;
-      }
+      /* TODO:
+         1. Оформи карточку рамкой
+         2. Добавь внутренние отступы и скругление
+         3. Стилизуй кнопку покупки */
     </style>
   </head>
   <body>
@@ -106,26 +94,12 @@ const taskThreeHtmlStarter = `<!DOCTYPE html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Список месяцев</title>
+    <title>Задача 3</title>
     <style>
-      li {
-        margin-left: 20px;
-      }
-
-      li.point {
-        color: black;
-      }
-
-      li.colored_point {
-        color: green;
-      }
-
-      .list {
-        border: 2px dotted #800080;
-        border-radius: 8px;
-        background-color: #fff8dc;
-        padding: 15px;
-      }
+      /* TODO:
+         1. Выдели нужные месяцы зеленым
+         2. Добавь отступы слева
+         3. Оформи список рамкой и фоном */
     </style>
   </head>
   <body>

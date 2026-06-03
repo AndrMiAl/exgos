@@ -78,10 +78,11 @@ const codeDrafts = reactive<Record<string, string>>({})
 const stdinDrafts = reactive<Record<string, string>>({})
 const runStates = reactive<Record<string, RunState | undefined>>({})
 const runningTaskId = ref('')
+const taskById = new Map(sections.flatMap((section) => section.tasks.map((task) => [task.id, task] as const)))
 
 for (const section of sections) {
   for (const task of section.tasks) {
-    codeDrafts[task.id] = readStoredValue(getCodeKey(task.id), getStarterCode(task))
+    codeDrafts[task.id] = readStoredCodeValue(task)
     stdinDrafts[task.id] = readStoredValue(getInputKey(task.id), getPythonRunner(task)?.stdin ?? '')
   }
 }
@@ -99,6 +100,12 @@ function inferSourceLabel(path: string) {
 }
 
 function getCodeKey(taskId: string) {
+  const task = taskById.get(taskId)
+
+  if (task?.runner?.language === 'sql' || task?.runner?.language === 'html') {
+    return `ge-task-code:v2:${taskId}`
+  }
+
   return `ge-task-code:${taskId}`
 }
 
@@ -109,6 +116,26 @@ function getInputKey(taskId: string) {
 function readStoredValue(key: string, fallback: string) {
   try {
     return window.localStorage.getItem(key) ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+function readStoredCodeValue(task: ViewTask) {
+  const fallback = getStarterCode(task)
+
+  try {
+    const stored = window.localStorage.getItem(getCodeKey(task.id))
+
+    if (!stored) {
+      return fallback
+    }
+
+    if ((task.runner?.language === 'sql' || task.runner?.language === 'html') && stored.trim() === task.solution.trim()) {
+      return fallback
+    }
+
+    return stored
   } catch {
     return fallback
   }
