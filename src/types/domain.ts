@@ -69,6 +69,7 @@ export interface TestAttempt {
   id: string
   ownerId: string
   sectionId: string | 'all'
+  questionScopeId?: string
   mode: AnswerFeedbackMode
   difficulty?: TestDifficulty
   selectionMode?: QuestionSelectionMode

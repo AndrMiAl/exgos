@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Finished, House, RefreshRight, Select } from '@element-plus/icons-vue'
 
+import { STATE_EXAM_2026_PDFS_SCOPE_ID, getQuestionScopePreset } from '@/data/questionScopes'
 import { useAuthStore } from '@/stores/auth'
 import { MASTERED_CORRECT_ANSWERS, useExamStore } from '@/stores/exam'
 import { useThemeStore } from '@/stores/theme'
@@ -21,6 +22,7 @@ import { getOptionDisplayText, getOptionSemanticKey } from '@/utils/questionOpti
 const authStore = useAuthStore()
 const examStore = useExamStore()
 const themeStore = useThemeStore()
+const route = useRoute()
 const router = useRouter()
 
 const selectedSectionId = ref<string | 'all'>('all')
@@ -32,6 +34,8 @@ const saveFinishedStats = ref(true)
 const finishEarly = ref(false)
 const activeExplanationPanels = ref(['details'])
 const answerLabels = ['а', 'б', 'в', 'г', 'д', 'е', 'ж', 'з']
+
+const stateExamPdfScope = getQuestionScopePreset(STATE_EXAM_2026_PDFS_SCOPE_ID)
 
 interface QuestionPoolSummary {
   totalQuestions: number
@@ -76,6 +80,18 @@ const overallSummary = computed(() => examStore.getQuestionPoolSummary(ownerId.v
 const adaptiveQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'adaptive'))
 const balancedQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'balanced'))
 const memorizeQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'memorize'))
+const stateExamPdfSummary = computed(() =>
+  stateExamPdfScope
+    ? examStore.getQuestionPoolSummary(ownerId.value, 'all', stateExamPdfScope.id)
+    : { totalQuestions: 0, availableQuestions: 0, masteredQuestions: 0 },
+)
+const stateExamPdfAdaptiveQuestionCount = computed(() =>
+  stateExamPdfScope ? examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'adaptive', stateExamPdfScope.id) : 0,
+)
+const stateExamPdfMemorizeQuestionCount = computed(() =>
+  stateExamPdfScope ? examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'memorize', stateExamPdfScope.id) : 0,
+)
+const isStateExamPdfPresetActive = computed(() => Boolean(stateExamPdfScope && route.query.preset === stateExamPdfScope.id))
 const practiceThemeClass = computed(() => (themeStore.isDark ? 'practice-page--dark' : 'practice-page--light'))
 
 function getSectionShortTitle(title: string) {
@@ -146,6 +162,13 @@ function createKnowledgeSnapshot(title: string, subtitle: string, summary: Quest
 const overallKnowledge = computed(() =>
   createKnowledgeSnapshot('Все темы', 'Общий уровень по всей программе', overallSummary.value),
 )
+const stateExamPdfKnowledge = computed(() =>
+  createKnowledgeSnapshot(
+    'Только I и II госэкзамен 2026',
+    'Отдельный набор вопросов только из двух PDF, но с общим прогрессом по тем же question.id',
+    stateExamPdfSummary.value,
+  ),
+)
 const sectionSummaries = computed(() =>
   examStore.sections.map((section) => {
     const summary = examStore.getQuestionPoolSummary(ownerId.value, section.id)
@@ -164,6 +187,22 @@ const attemptKnowledgeSummary = computed(() => {
 
   if (!attempt || attempt.status !== 'completed') {
     return null
+  }
+
+  const scope = getQuestionScopePreset(attempt.questionScopeId)
+
+  if (scope) {
+    const summary = examStore.getQuestionPoolSummary(ownerId.value, attempt.sectionId, scope.id)
+    const knowledge = createKnowledgeSnapshot(scope.title, scope.description, summary)
+
+    return {
+      ...knowledge,
+      title:
+        attempt.selectionMode === 'memorize'
+          ? `Прогресс по режиму заучивания: ${scope.shortTitle}`
+          : `Прогресс по набору: ${scope.shortTitle}`,
+      subtitle: 'Считается по тем же вопросам, поэтому результат уже вошел в общую статистику и другие режимы.',
+    }
   }
 
   if (attempt.sectionId === 'all') {
@@ -218,6 +257,7 @@ const currentSection = computed(() => {
 
   return examStore.sectionById(currentQuestion.value.sectionId)
 })
+const currentAttemptScope = computed(() => getQuestionScopePreset(workingAttempt.value?.questionScopeId))
 const currentAnswer = computed(() => {
   const attempt = workingAttempt.value
 
@@ -289,6 +329,14 @@ function getOrderedOptions(question: ExamQuestion, attempt: TestAttempt, questio
 }
 
 function getAttemptSelectionLabel(attempt: TestAttempt) {
+  if (attempt.questionScopeId) {
+    if (attempt.selectionMode === 'memorize') {
+      return 'Заучивание только по двум PDF'
+    }
+
+    return 'Только вопросы из двух PDF'
+  }
+
   if (attempt.selectionMode === 'memorize') {
     return attempt.sectionId === 'all' ? 'Заучивание до 3 верных' : 'Заучивание темы до 3 верных'
   }
@@ -431,7 +479,24 @@ function extractConcept(question: ExamQuestion) {
   return cleanQuestionText(question.text)
 }
 
-function notifyNoQuestions(sectionId: string | 'all') {
+function getNoQuestionsMessage(questionScopeId?: string) {
+  const scope = getQuestionScopePreset(questionScopeId)
+
+  if (!scope) {
+    return null
+  }
+
+  return `В наборе "${scope.shortTitle}" больше не осталось доступных вопросов: после ${MASTERED_CORRECT_ANSWERS} правильных ответов вопрос считается закрепленным.`
+}
+
+function notifyNoQuestions(sectionId: string | 'all', questionScopeId?: string) {
+  const scopeMessage = getNoQuestionsMessage(questionScopeId)
+
+  if (scopeMessage) {
+    ElMessage.info(scopeMessage)
+    return
+  }
+
   ElMessage.info(
     sectionId === 'all'
       ? `Нет доступных вопросов: после ${MASTERED_CORRECT_ANSWERS} правильных ответов вопрос считается изученным и больше не попадает в новые попытки.`
@@ -444,12 +509,20 @@ function launchAttempt(
   selectionMode: QuestionSelectionMode,
   mode = selectedMode.value,
   difficulty = selectedDifficulty.value,
+  questionScopeId?: string,
 ) {
   const effectiveMode: AnswerFeedbackMode = selectionMode === 'memorize' ? 'immediate' : mode
-  const attempt = examStore.startAttempt(ownerId.value, sectionId, effectiveMode, difficulty, selectionMode)
+  const attempt = examStore.startAttempt(
+    ownerId.value,
+    sectionId,
+    effectiveMode,
+    difficulty,
+    selectionMode,
+    questionScopeId,
+  )
 
   if (!attempt) {
-    notifyNoQuestions(sectionId)
+    notifyNoQuestions(sectionId, questionScopeId)
     return
   }
 
@@ -544,7 +617,7 @@ const progressPercent = computed(() => {
   }
 
   if (attempt.selectionMode === 'memorize') {
-    const summary = examStore.getQuestionPoolSummary(ownerId.value, attempt.sectionId)
+    const summary = examStore.getQuestionPoolSummary(ownerId.value, attempt.sectionId, attempt.questionScopeId)
 
     if (summary.totalQuestions === 0) {
       return 0
@@ -562,7 +635,7 @@ const memorizationRemainingQuestions = computed(() => {
     return 0
   }
 
-  return examStore.getQuestionPoolSummary(ownerId.value, attempt.sectionId).availableQuestions
+  return examStore.getQuestionPoolSummary(ownerId.value, attempt.sectionId, attempt.questionScopeId).availableQuestions
 })
 const result = computed(() => {
   const attempt = workingAttempt.value
@@ -725,6 +798,22 @@ function startMemorizeAttempt() {
   launchAttempt('all', 'memorize', 'immediate')
 }
 
+function startStateExamPdfAttempt() {
+  if (!stateExamPdfScope) {
+    return
+  }
+
+  launchAttempt('all', 'adaptive', selectedMode.value, selectedDifficulty.value, stateExamPdfScope.id)
+}
+
+function startMemorizeStateExamPdfAttempt() {
+  if (!stateExamPdfScope) {
+    return
+  }
+
+  launchAttempt('all', 'memorize', 'immediate', selectedDifficulty.value, stateExamPdfScope.id)
+}
+
 function startSectionAttempt(sectionId: string) {
   launchAttempt(sectionId, 'adaptive')
 }
@@ -739,8 +828,9 @@ function restartAttempt() {
   const mode = attempt?.mode ?? selectedMode.value
   const difficulty = attempt?.difficulty ?? selectedDifficulty.value
   const selectionMode = attempt?.selectionMode ?? selectedSelectionMode.value
+  const questionScopeId = attempt?.questionScopeId
 
-  launchAttempt(sectionId, selectionMode, mode, difficulty)
+  launchAttempt(sectionId, selectionMode, mode, difficulty, questionScopeId)
 }
 
 function resumeAttempt() {
@@ -994,6 +1084,58 @@ function finishAttempt() {
         </el-card>
       </div>
 
+      <div v-if="stateExamPdfScope" class="section-picker">
+        <el-card
+          shadow="never"
+          class="section-option section-option--materials"
+          :class="{ 'section-option--focus': isStateExamPdfPresetActive }"
+        >
+          <span>Отдельный тест по источникам</span>
+          <strong>{{ stateExamPdfScope.shortTitle }}</strong>
+          <small>
+            Доступно: {{ stateExamPdfSummary.availableQuestions }} из {{ stateExamPdfSummary.totalQuestions }}
+            · Закреплено: {{ stateExamPdfSummary.masteredQuestions }}
+          </small>
+          <div class="knowledge-meter">
+            <div class="knowledge-meter__header">
+              <span>Прогресс по двум PDF</span>
+              <strong :style="{ color: stateExamPdfKnowledge.knowledgeColor }">{{ stateExamPdfKnowledge.knowledgePercent }}%</strong>
+            </div>
+            <el-progress
+              :percentage="stateExamPdfKnowledge.knowledgePercent"
+              :show-text="false"
+              :stroke-width="10"
+              :color="stateExamPdfKnowledge.knowledgeColor"
+              class="knowledge-progress"
+            />
+            <div class="knowledge-meter__footer">
+              <span>Закрепление считается по тем же question.id, поэтому засчитывается и в общем тесте</span>
+              <span>{{ stateExamPdfKnowledge.masteredQuestions }} из {{ stateExamPdfKnowledge.totalQuestions }} уже закреплено</span>
+            </div>
+          </div>
+          <div class="section-option__actions">
+            <el-button
+              type="primary"
+              plain
+              :icon="Select"
+              :disabled="stateExamPdfAdaptiveQuestionCount === 0"
+              @click="startStateExamPdfAttempt"
+            >
+              Решать только эти PDF: {{ stateExamPdfAdaptiveQuestionCount }} вопросов
+            </el-button>
+            <el-button
+              type="warning"
+              plain
+              :icon="Select"
+              :disabled="stateExamPdfMemorizeQuestionCount === 0"
+              @click="startMemorizeStateExamPdfAttempt"
+            >
+              Заучивать только эти PDF: {{ stateExamPdfMemorizeQuestionCount }}
+            </el-button>
+          </div>
+        </el-card>
+      </div>
+
       <div v-if="activeAttempt" class="button-row">
         <el-button size="large" @click="resumeAttempt">Продолжить попытку</el-button>
       </div>
@@ -1068,6 +1210,7 @@ function finishAttempt() {
             <span class="attempt-meta attempt-meta--title">{{ currentSection?.title }}</span>
             <span class="attempt-meta">{{ workingAttempt.mode === 'immediate' ? 'Проверка сразу' : 'Проверка после завершения' }}</span>
             <span class="attempt-meta">{{ workingAttempt.difficulty === 'normal' ? 'Обычный' : 'Сложный' }}</span>
+            <span v-if="currentAttemptScope" class="attempt-meta">{{ currentAttemptScope.shortTitle }}</span>
             <span class="attempt-meta">{{ getAttemptSelectionLabel(workingAttempt) }}</span>
             <span v-if="workingAttempt.selectionMode === 'memorize' && currentQuestionMastery" class="attempt-meta">
               {{ currentQuestionMastery.isMastered ? 'Уже закреплен' : `До закрепления: ${currentQuestionMastery.correctAnswers}/${MASTERED_CORRECT_ANSWERS}` }}
@@ -1543,6 +1686,16 @@ function finishAttempt() {
 
 .section-option--gek {
   background: linear-gradient(160deg, rgba(22, 163, 74, 0.14) 0%, var(--practice-panel-bg) 70%);
+}
+
+.section-option--materials {
+  background: linear-gradient(160deg, rgba(245, 158, 11, 0.16) 0%, var(--practice-panel-bg) 72%);
+}
+
+.section-option--focus {
+  box-shadow:
+    0 0 0 1px rgba(96, 165, 250, 0.28),
+    0 18px 38px var(--practice-shadow);
 }
 
 .knowledge-meter {

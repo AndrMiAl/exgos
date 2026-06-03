@@ -102,7 +102,11 @@ function inferSourceLabel(path: string) {
 function getCodeKey(taskId: string) {
   const task = taskById.get(taskId)
 
-  if (task?.runner?.language === 'sql' || task?.runner?.language === 'html') {
+  if (task?.runner?.language === 'html') {
+    return `ge-task-code:v3:${taskId}`
+  }
+
+  if (task?.runner?.language === 'sql') {
     return `ge-task-code:v2:${taskId}`
   }
 

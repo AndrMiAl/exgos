@@ -8,6 +8,7 @@ import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/compon
 import { CanvasRenderer } from 'echarts/renderers'
 import VChart from 'vue-echarts'
 
+import { getQuestionScopePreset } from '@/data/questionScopes'
 import { useAuthStore } from '@/stores/auth'
 import { MASTERED_CORRECT_ANSWERS, useExamStore } from '@/stores/exam'
 import { useThemeStore } from '@/stores/theme'
@@ -334,6 +335,12 @@ function getSectionLabel(sectionId: string | 'all') {
 }
 
 function getSelectionModeLabel(attempt: TestAttempt) {
+  const scope = getQuestionScopePreset(attempt.questionScopeId)
+
+  if (scope) {
+    return attempt.selectionMode === 'memorize' ? `Заучивание: ${scope.shortTitle}` : scope.shortTitle
+  }
+
   if (attempt.selectionMode === 'memorize') {
     return attempt.sectionId === 'all' ? selectionModeLabels.memorize : 'Заучивание темы'
   }

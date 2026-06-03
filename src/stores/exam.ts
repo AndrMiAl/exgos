@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { apiRequest } from '@/api/client'
 import { studyMaterials } from '@/data/materials'
 import { questionSections } from '@/data/questionBank'
+import { questionMatchesScope } from '@/data/questionScopes'
 import { useAuthStore } from '@/stores/auth'
 import type {
   AnswerFeedbackMode,
@@ -50,6 +51,14 @@ function sampleQuestions<T>(items: T[], count: number) {
 
 function pickRandomItem<T>(items: T[]) {
   return sampleQuestions(items, 1)[0] ?? null
+}
+
+function filterQuestionsByScope(questions: ExamQuestion[], questionScopeId?: string | null) {
+  if (!questionScopeId) {
+    return questions
+  }
+
+  return questions.filter((question) => questionMatchesScope(question, questionScopeId))
 }
 
 function createAttemptQuestionEntry(question: ExamQuestion) {
@@ -280,10 +289,11 @@ export const useExamStore = defineStore('exam', {
     questionByAttemptEntry(attempt: TestAttempt, questionEntryId: string) {
       return this.questionById(this.resolveAttemptQuestionId(attempt, questionEntryId))
     },
-    pickMemorizationQuestion(ownerId: string, sectionId: string | 'all') {
+    pickMemorizationQuestion(ownerId: string, sectionId: string | 'all', questionScopeId?: string) {
       const availableQuestions = this.getQuestionsForSection(sectionId, {
         ownerId,
         includeMastered: false,
+        questionScopeId,
       })
 
       return pickRandomItem(availableQuestions)
@@ -326,7 +336,7 @@ export const useExamStore = defineStore('exam', {
         return
       }
 
-      const nextQuestion = this.pickMemorizationQuestion(attempt.ownerId, attempt.sectionId)
+      const nextQuestion = this.pickMemorizationQuestion(attempt.ownerId, attempt.sectionId, attempt.questionScopeId)
 
       if (!nextQuestion) {
         return
@@ -340,21 +350,26 @@ export const useExamStore = defineStore('exam', {
     },
     getQuestionsForSection(
       sectionId: string | 'all',
-      options: { ownerId?: string; includeMastered?: boolean } = {},
+      options: { ownerId?: string; includeMastered?: boolean; questionScopeId?: string } = {},
     ) {
       const questions = sectionId === 'all' ? this.allQuestions : this.sectionById(sectionId)?.questions ?? []
+      const scopedQuestions = filterQuestionsByScope(questions, options.questionScopeId)
 
       if (options.includeMastered || !options.ownerId) {
-        return questions
+        return scopedQuestions
       }
 
-      return questions.filter((question) => !this.isQuestionMastered(options.ownerId as string, question.id))
+      return scopedQuestions.filter((question) => !this.isQuestionMastered(options.ownerId as string, question.id))
     },
-    getQuestionPoolSummary(ownerId: string, sectionId: string | 'all') {
-      const totalQuestions = this.getQuestionsForSection(sectionId, { includeMastered: true }).length
+    getQuestionPoolSummary(ownerId: string, sectionId: string | 'all', questionScopeId?: string) {
+      const totalQuestions = this.getQuestionsForSection(sectionId, {
+        includeMastered: true,
+        questionScopeId,
+      }).length
       const availableQuestions = this.getQuestionsForSection(sectionId, {
         ownerId,
         includeMastered: false,
+        questionScopeId,
       }).length
 
       return {
@@ -367,10 +382,12 @@ export const useExamStore = defineStore('exam', {
       ownerId: string,
       sectionId: string | 'all',
       selectionMode: QuestionSelectionMode = 'adaptive',
+      questionScopeId?: string,
     ) {
       const availableQuestionsCount = this.getQuestionsForSection(sectionId, {
         ownerId,
         includeMastered: false,
+        questionScopeId,
       }).length
 
       if (selectionMode === 'memorize') {
@@ -383,11 +400,13 @@ export const useExamStore = defineStore('exam', {
       ownerId: string,
       sectionId: string | 'all',
       selectionMode: QuestionSelectionMode = 'adaptive',
+      questionScopeId?: string,
     ) {
       if (sectionId !== 'all') {
         const questions = this.getQuestionsForSection(sectionId, {
           ownerId,
           includeMastered: false,
+          questionScopeId,
         })
         return sampleQuestions(questions, Math.min(questions.length, MAX_QUESTIONS_PER_TEST))
       }
@@ -399,6 +418,7 @@ export const useExamStore = defineStore('exam', {
           questions: this.getQuestionsForSection(section.id, {
             ownerId,
             includeMastered: false,
+            questionScopeId,
           }),
         }))
         .filter((section) => section.questions.length > 0)
@@ -416,6 +436,7 @@ export const useExamStore = defineStore('exam', {
       mode: AnswerFeedbackMode,
       difficulty: TestDifficulty,
       selectionMode: QuestionSelectionMode = 'adaptive',
+      questionScopeId?: string,
     ) {
       this.attempts
         .filter((attempt) => attempt.ownerId === ownerId && attempt.status === 'active')
@@ -429,6 +450,7 @@ export const useExamStore = defineStore('exam', {
         id: createId('attempt'),
         ownerId,
         sectionId,
+        questionScopeId,
         mode: selectionMode === 'memorize' ? 'immediate' : mode,
         difficulty,
         selectionMode,
@@ -443,7 +465,7 @@ export const useExamStore = defineStore('exam', {
       }
 
       if (selectionMode === 'memorize') {
-        const firstQuestion = this.pickMemorizationQuestion(ownerId, sectionId)
+        const firstQuestion = this.pickMemorizationQuestion(ownerId, sectionId, questionScopeId)
 
         if (!firstQuestion) {
           return null
@@ -451,7 +473,7 @@ export const useExamStore = defineStore('exam', {
 
         this.appendQuestionToAttempt(attempt, firstQuestion)
       } else {
-        const questions = this.generateQuestionSet(ownerId, sectionId, selectionMode)
+        const questions = this.generateQuestionSet(ownerId, sectionId, selectionMode, questionScopeId)
 
         if (questions.length === 0) {
           return null

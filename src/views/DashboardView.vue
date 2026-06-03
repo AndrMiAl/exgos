@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { CircleCheck, Collection, EditPen, Medal, Reading, TrendCharts } from '@element-plus/icons-vue'
 
+import { STATE_EXAM_2026_PDFS_SCOPE_ID, getQuestionScopePreset } from '@/data/questionScopes'
 import { useAuthStore } from '@/stores/auth'
 import { useExamStore } from '@/stores/exam'
 import { getAccuracyPercent, getExamGrade } from '@/utils/grading'
@@ -23,6 +24,20 @@ const correctAnswers = computed(() =>
 )
 const accuracy = computed(() => getAccuracyPercent(correctAnswers.value, totalAnswers.value))
 const grade = computed(() => getExamGrade(accuracy.value))
+
+const stateExamPdfScope = getQuestionScopePreset(STATE_EXAM_2026_PDFS_SCOPE_ID)
+const stateExamPdfSummary = computed(() =>
+  stateExamPdfScope
+    ? examStore.getQuestionPoolSummary(ownerId.value, 'all', stateExamPdfScope.id)
+    : { totalQuestions: 0, availableQuestions: 0, masteredQuestions: 0 },
+)
+const stateExamPdfKnowledgePercent = computed(() => {
+  if (!stateExamPdfSummary.value.totalQuestions) {
+    return 0
+  }
+
+  return Math.round((stateExamPdfSummary.value.masteredQuestions / stateExamPdfSummary.value.totalQuestions) * 100)
+})
 </script>
 
 <template>
@@ -33,6 +48,9 @@ const grade = computed(() => getExamGrade(accuracy.value))
         <h1>Рабочая панель</h1>
       </div>
       <div class="button-row">
+        <RouterLink v-if="stateExamPdfScope" :to="{ path: '/practice', query: { preset: stateExamPdfScope.id } }">
+          <el-button :icon="Collection">Тест по 2 PDF</el-button>
+        </RouterLink>
         <RouterLink to="/tasks">
           <el-button :icon="Reading">Все задачи GE-main</el-button>
         </RouterLink>
@@ -77,14 +95,36 @@ const grade = computed(() => getExamGrade(accuracy.value))
       description="На странице решения можно продолжить ее с того места, где вы остановились, или начать заново."
     />
 
+    <el-card v-if="stateExamPdfScope" shadow="never" class="metric-card">
+      <div class="dashboard-feature">
+        <div class="dashboard-feature__copy">
+          <p class="eyebrow">Отдельный набор из материалов</p>
+          <h2>{{ stateExamPdfScope.title }}</h2>
+          <p class="muted">
+            Здесь попадают только вопросы из двух PDF с вариантами госэкзамена 2026. Прогресс общий:
+            если вопрос закрепился в этом режиме, он сразу засчитывается и во всех остальных тестах.
+          </p>
+          <div class="dashboard-feature__stats">
+            <span>В наборе: {{ stateExamPdfSummary.totalQuestions }}</span>
+            <span>Осталось: {{ stateExamPdfSummary.availableQuestions }}</span>
+            <span>Закреплено: {{ stateExamPdfSummary.masteredQuestions }}</span>
+            <span>Прогресс: {{ stateExamPdfKnowledgePercent }}%</span>
+          </div>
+        </div>
+        <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id } }">
+          <el-button type="primary" plain :icon="EditPen">Открыть тест по 2 PDF</el-button>
+        </RouterLink>
+      </div>
+    </el-card>
+
     <el-card shadow="never" class="metric-card">
       <div class="dashboard-feature">
         <div class="dashboard-feature__copy">
           <p class="eyebrow">Практика по всем разделам</p>
           <h2>Задачи из Python, алгоритмов, ML, SQL и Web</h2>
           <p class="muted">
-            Внутри лежат реальные практические файлы из распакованного GE-main. Можно открыть
-            раздел, посмотреть формулировку и только потом раскрыть код или запрос из архива.
+            Внутри лежат реальные практические файлы из распакованного GE-main. Можно открыть раздел,
+            посмотреть формулировку и только потом раскрыть код или запрос из архива.
           </p>
         </div>
         <RouterLink to="/tasks">
@@ -114,6 +154,23 @@ const grade = computed(() => getExamGrade(accuracy.value))
 
 .dashboard-feature__copy {
   max-width: 720px;
+}
+
+.dashboard-feature__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.dashboard-feature__stats span {
+  padding: 8px 12px;
+  border: 1px solid var(--app-border, rgba(148, 163, 184, 0.2));
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--app-text, inherit);
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 @media (max-width: 860px) {

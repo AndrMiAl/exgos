@@ -40,76 +40,15 @@ SELECT
 FROM Company;
 `
 
-const taskOneHtmlStarter = `<!DOCTYPE html>
-<html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Задача 1</title>
-    <style>
-      /* TODO:
-         1. Добавь отступы между пунктами
-         2. Сделай выделенные пункты красными
-         3. Оформи рамку вокруг списка */
-    </style>
-  </head>
-  <body>
-    <ul class="list">
-      <li class="point">Пункт 1</li>
-      <li class="colored_point">Пункт 2</li>
-      <li class="point">Пункт 3</li>
-      <li class="colored_point">Пункт 4</li>
-    </ul>
-  </body>
-</html>
-`
+const defaultHtmlStarter = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
 
-const taskTwoHtmlStarter = `<!DOCTYPE html>
-<html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Задача 2</title>
-    <style>
-      /* TODO:
-         1. Оформи карточку рамкой
-         2. Добавь внутренние отступы и скругление
-         3. Стилизуй кнопку покупки */
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h3>Название товара</h3>
-      <p>Описание товара. Цена: 999 р.</p>
-      <div>
-        <button class="buy_button">Купить</button>
-      </div>
-    </div>
-  </body>
-</html>
-`
-
-const taskThreeHtmlStarter = `<!DOCTYPE html>
-<html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Задача 3</title>
-    <style>
-      /* TODO:
-         1. Выдели нужные месяцы зеленым
-         2. Добавь отступы слева
-         3. Оформи список рамкой и фоном */
-    </style>
-  </head>
-  <body>
-    <ul class="list">
-      <li class="colored_point">Январь</li>
-      <li class="point">Февраль</li>
-      <li class="colored_point">Март</li>
-      <li class="point">Апрель</li>
-    </ul>
-  </body>
+</body>
 </html>
 `
 
@@ -296,17 +235,17 @@ export const geTaskRunners: Record<string, GeTaskRunner> = {
   },
   'web_practice/task_1.html': {
     language: 'html',
-    starterCode: taskOneHtmlStarter,
+    starterCode: defaultHtmlStarter,
     note: 'HTML и CSS можно сразу редактировать и смотреть в живом превью ниже.',
   },
   'web_practice/task_2.html': {
     language: 'html',
-    starterCode: taskTwoHtmlStarter,
+    starterCode: defaultHtmlStarter,
     note: 'HTML и CSS можно сразу редактировать и смотреть в живом превью ниже.',
   },
   'web_practice/task_3.html': {
     language: 'html',
-    starterCode: taskThreeHtmlStarter,
+    starterCode: defaultHtmlStarter,
     note: 'HTML и CSS можно сразу редактировать и смотреть в живом превью ниже.',
   },
 }
