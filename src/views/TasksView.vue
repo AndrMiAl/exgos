@@ -79,6 +79,7 @@ const stdinDrafts = reactive<Record<string, string>>({})
 const runStates = reactive<Record<string, RunState | undefined>>({})
 const runningTaskId = ref('')
 const taskById = new Map(sections.flatMap((section) => section.tasks.map((task) => [task.id, task] as const)))
+const editorIndent = '    '
 
 for (const section of sections) {
   for (const task of section.tasks) {
@@ -159,6 +160,87 @@ function persistInput(taskId: string) {
   } catch {
     // Ignore localStorage failures.
   }
+}
+
+function restoreEditorSelection(textarea: HTMLTextAreaElement, start: number, end: number) {
+  requestAnimationFrame(() => {
+    textarea.focus()
+    textarea.setSelectionRange(start, end)
+  })
+}
+
+function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
+  if (event.key !== 'Tab') {
+    return
+  }
+
+  const textarea = event.target instanceof HTMLTextAreaElement ? event.target : null
+
+  if (!textarea) {
+    return
+  }
+
+  event.preventDefault()
+
+  const value = codeDrafts[taskId] ?? ''
+  const selectionStart = textarea.selectionStart ?? 0
+  const selectionEnd = textarea.selectionEnd ?? selectionStart
+  const lineStart = value.lastIndexOf('\n', Math.max(0, selectionStart - 1)) + 1
+  const selectedBlock = value.slice(lineStart, selectionEnd)
+  const spansMultipleLines = selectedBlock.includes('\n') || selectionStart !== selectionEnd
+
+  if (event.shiftKey) {
+    const blockEnd = selectionEnd
+    const block = value.slice(lineStart, blockEnd)
+    const lines = block.split('\n')
+    const removalPerLine = lines.map((line) => {
+      if (line.startsWith(editorIndent)) {
+        return editorIndent.length
+      }
+
+      if (line.startsWith('\t')) {
+        return 1
+      }
+
+      const partialSpaces = line.match(/^ {1,3}/)
+      return partialSpaces ? partialSpaces[0].length : 0
+    })
+    const updatedLines = lines.map((line, index) => line.slice(removalPerLine[index]))
+    const updatedBlock = updatedLines.join('\n')
+    const totalRemoved = removalPerLine.reduce((sum, count) => sum + count, 0)
+    const removedFromFirstLine = removalPerLine[0] ?? 0
+    const nextValue = `${value.slice(0, lineStart)}${updatedBlock}${value.slice(blockEnd)}`
+    const nextStart = selectionStart === selectionEnd
+      ? Math.max(lineStart, selectionStart - removedFromFirstLine)
+      : Math.max(lineStart, selectionStart - removedFromFirstLine)
+    const nextEnd = Math.max(nextStart, selectionEnd - totalRemoved)
+
+    codeDrafts[taskId] = nextValue
+    persistCode(taskId)
+    restoreEditorSelection(textarea, nextStart, nextEnd)
+    return
+  }
+
+  if (!spansMultipleLines) {
+    const nextValue = `${value.slice(0, selectionStart)}${editorIndent}${value.slice(selectionEnd)}`
+    const nextCaret = selectionStart + editorIndent.length
+
+    codeDrafts[taskId] = nextValue
+    persistCode(taskId)
+    restoreEditorSelection(textarea, nextCaret, nextCaret)
+    return
+  }
+
+  const block = value.slice(lineStart, selectionEnd)
+  const lines = block.split('\n')
+  const updatedBlock = lines.map((line) => `${editorIndent}${line}`).join('\n')
+  const nextValue = `${value.slice(0, lineStart)}${updatedBlock}${value.slice(selectionEnd)}`
+  const nextStart = selectionStart + editorIndent.length
+  const nextEnd = selectionEnd + editorIndent.length * lines.length
+
+  codeDrafts[taskId] = nextValue
+  persistCode(taskId)
+  restoreEditorSelection(textarea, nextStart, nextEnd)
 }
 
 function getStarterCode(task: ViewTask) {
@@ -477,6 +559,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                     resize="vertical"
                     class="task-editor"
                     @update:model-value="persistCode(task.id)"
+                    @keydown="handleEditorKeydown(task.id, $event)"
                   />
                 </div>
 

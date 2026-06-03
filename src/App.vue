@@ -22,6 +22,7 @@ const examStore = useExamStore()
 const themeStore = useThemeStore()
 
 const activePath = computed(() => route.path)
+const activeAttempt = computed(() => examStore.activeAttempt(authStore.ownerId))
 const userLabel = computed(() => authStore.displayName)
 const themeLabel = computed(() => (themeStore.isDark ? 'Светлая тема' : 'Темная тема'))
 const ThemeIcon = computed(() => (themeStore.isDark ? Sunny : MoonNight))
@@ -98,6 +99,12 @@ onBeforeUnmount(() => {
       </el-menu>
 
       <div class="sidebar-tools">
+        <RouterLink v-if="activeAttempt" :to="{ path: '/practice', query: { resume: 'active' } }">
+          <el-button class="theme-toggle" type="primary" plain>
+            <el-icon><EditPen /></el-icon>
+            <span>Незавершенная попытка</span>
+          </el-button>
+        </RouterLink>
         <el-button class="theme-toggle" plain @click="toggleTheme">
           <el-icon><component :is="ThemeIcon" /></el-icon>
           <span>{{ themeLabel }}</span>

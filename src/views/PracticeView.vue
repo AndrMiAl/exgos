@@ -231,7 +231,7 @@ const attemptKnowledgeSummary = computed(() => {
   }
 })
 
-const workingAttempt = computed(() => currentAttempt.value ?? activeAttempt.value)
+const workingAttempt = computed(() => currentAttempt.value)
 const currentQuestionEntryId = computed(() => {
   const attempt = workingAttempt.value
 
@@ -836,6 +836,22 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => [route.query.resume, activeAttempt.value?.id],
+  ([resume]) => {
+    if (resume !== 'active' || !activeAttempt.value) {
+      return
+    }
+
+    resumeAttempt()
+
+    const nextQuery = { ...route.query }
+    delete nextQuery.resume
+    void router.replace({ path: route.path, query: nextQuery })
+  },
+  { immediate: true },
+)
+
 function startSectionAttempt(sectionId: string) {
   launchAttempt(sectionId, 'adaptive')
 }
@@ -867,6 +883,15 @@ function resumeAttempt() {
   selectedDifficulty.value = attempt.difficulty ?? 'normal'
   selectedSelectionMode.value = attempt.selectionMode ?? 'adaptive'
   currentAttempt.value = attempt
+}
+
+function goToPracticeOverview() {
+  currentAttempt.value = null
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.resume
+  delete nextQuery.autostart
+  void router.replace({ path: '/practice', query: nextQuery })
 }
 
 function goPrevious() {
@@ -1159,7 +1184,18 @@ function finishAttempt() {
       </div>
 
       <div v-if="activeAttempt" class="button-row">
-        <el-button size="large" @click="resumeAttempt">Продолжить попытку</el-button>
+        <el-alert
+          type="info"
+          show-icon
+          :closable="false"
+          class="resume-attempt-alert"
+        >
+          <template #title>Незавершенная попытка</template>
+          <template #default>
+            Обзор тем уже доступен ниже. Текущую попытку можно в любой момент продолжить с того же места.
+          </template>
+        </el-alert>
+        <el-button size="large" type="primary" @click="resumeAttempt">Продолжить попытку</el-button>
       </div>
 
       <div class="section-picker">
@@ -1241,6 +1277,7 @@ function finishAttempt() {
         </div>
         <div class="toolbar-actions">
           <el-button class="mobile-early-finish" :icon="Finished" @click="openFinishDialog(true)">Завершить</el-button>
+          <el-button :icon="House" @click="goToPracticeOverview">К обзору тем</el-button>
           <el-button :icon="House" @click="goToMainMenu">В главное меню</el-button>
           <el-button :icon="RefreshRight" @click="restartAttempt">Начать заново</el-button>
         </div>
@@ -1435,6 +1472,7 @@ function finishAttempt() {
           Назад
         </el-button>
         <el-button class="desktop-early-finish" :icon="Finished" @click="openFinishDialog(true)">Завершить досрочно</el-button>
+        <el-button :icon="House" @click="goToPracticeOverview">К обзору тем</el-button>
         <el-button :icon="House" @click="goToMainMenu">В главное меню</el-button>
         <div class="spacer" />
         <el-button
