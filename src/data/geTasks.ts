@@ -98,7 +98,13 @@ Y = [3, 0, 2, 9]`,
           'Посмотреть, как из объекта получают данные о поезде.',
         ],
         exampleLabel: 'Пример',
-        example: 'my_train = Train(type="грузовой", speed=120)',
+        example: `class Train:
+    def __init__(self, type, speed):
+        # сохрани тип и скорость в полях объекта
+        ...
+
+my_train = Train(type="грузовой", speed=120)
+print(my_train.speed)`,
         resultLabel: 'Что должно вывести',
         result: '120',
       },
