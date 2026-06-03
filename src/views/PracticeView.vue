@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Finished, House, RefreshRight, Select } from '@element-plus/icons-vue'
@@ -814,6 +814,28 @@ function startMemorizeStateExamPdfAttempt() {
   launchAttempt('all', 'memorize', 'immediate', selectedDifficulty.value, stateExamPdfScope.id)
 }
 
+watch(
+  () => [route.query.preset, route.query.autostart],
+  ([preset, autostart]) => {
+    if (!stateExamPdfScope || preset !== stateExamPdfScope.id || typeof autostart !== 'string') {
+      return
+    }
+
+    if (autostart === 'single') {
+      startStateExamPdfAttempt()
+    } else if (autostart === 'memorize') {
+      startMemorizeStateExamPdfAttempt()
+    } else {
+      return
+    }
+
+    const nextQuery = { ...route.query }
+    delete nextQuery.autostart
+    void router.replace({ path: route.path, query: nextQuery })
+  },
+  { immediate: true },
+)
+
 function startSectionAttempt(sectionId: string) {
   launchAttempt(sectionId, 'adaptive')
 }
@@ -1121,7 +1143,7 @@ function finishAttempt() {
               :disabled="stateExamPdfAdaptiveQuestionCount === 0"
               @click="startStateExamPdfAttempt"
             >
-              Решать только эти PDF: {{ stateExamPdfAdaptiveQuestionCount }} вопросов
+              Пройти 1 раз: {{ stateExamPdfAdaptiveQuestionCount }} вопросов
             </el-button>
             <el-button
               type="warning"
@@ -1130,7 +1152,7 @@ function finishAttempt() {
               :disabled="stateExamPdfMemorizeQuestionCount === 0"
               @click="startMemorizeStateExamPdfAttempt"
             >
-              Заучивать только эти PDF: {{ stateExamPdfMemorizeQuestionCount }}
+              Заучивать циклом: {{ stateExamPdfMemorizeQuestionCount }}
             </el-button>
           </div>
         </el-card>

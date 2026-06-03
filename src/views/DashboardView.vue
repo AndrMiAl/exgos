@@ -111,9 +111,14 @@ const stateExamPdfKnowledgePercent = computed(() => {
             <span>Прогресс: {{ stateExamPdfKnowledgePercent }}%</span>
           </div>
         </div>
-        <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id } }">
-          <el-button type="primary" plain :icon="EditPen">Открыть тест по 2 PDF</el-button>
-        </RouterLink>
+        <div class="dashboard-feature__actions">
+          <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id, autostart: 'single' } }">
+            <el-button type="primary" plain :icon="EditPen">Пройти 1 раз</el-button>
+          </RouterLink>
+          <RouterLink :to="{ path: '/practice', query: { preset: stateExamPdfScope.id, autostart: 'memorize' } }">
+            <el-button type="warning" plain :icon="EditPen">Заучивать циклом</el-button>
+          </RouterLink>
+        </div>
       </div>
     </el-card>
 
@@ -173,9 +178,19 @@ const stateExamPdfKnowledgePercent = computed(() => {
   line-height: 1.3;
 }
 
+.dashboard-feature__actions {
+  display: grid;
+  gap: 10px;
+  min-width: 220px;
+}
+
 @media (max-width: 860px) {
   .dashboard-feature {
     display: grid;
+  }
+
+  .dashboard-feature__actions {
+    min-width: 0;
   }
 }
 </style>
