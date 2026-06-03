@@ -111,7 +111,7 @@ function getCodeKey(taskId: string) {
     return `ge-task-code:v2:${taskId}`
   }
 
-  return `ge-task-code:${taskId}`
+  return `ge-task-code:v2:${taskId}`
 }
 
 function getInputKey(taskId: string) {
@@ -127,7 +127,7 @@ function readStoredValue(key: string, fallback: string) {
 }
 
 function readStoredCodeValue(task: ViewTask) {
-  const fallback = getStarterCode(task)
+  const fallback = resolveStarterCode(task)
 
   try {
     const stored = window.localStorage.getItem(getCodeKey(task.id))
@@ -268,13 +268,19 @@ function getStarterCode(task: ViewTask) {
   return task.runner?.starterCode ?? '# Напиши решение здесь\n'
 }
 
+void getStarterCode
+
+function resolveStarterCode(task: ViewTask) {
+  return task.runner?.starterCode ?? ''
+}
+
 function fillWithSolution(task: ViewTask) {
   codeDrafts[task.id] = task.solution
   persistCode(task.id)
 }
 
 function resetDraft(task: ViewTask) {
-  codeDrafts[task.id] = getStarterCode(task)
+  codeDrafts[task.id] = resolveStarterCode(task)
   stdinDrafts[task.id] = getPythonRunner(task)?.stdin ?? ''
   persistCode(task.id)
   persistInput(task.id)
