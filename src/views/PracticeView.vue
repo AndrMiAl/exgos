@@ -1006,6 +1006,29 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => [route.query.section, route.query.mode],
+  ([sectionId, mode]) => {
+    if (typeof sectionId !== 'string' || typeof mode !== 'string' || !examStore.sectionById(sectionId)) {
+      return
+    }
+
+    if (mode === 'adaptive') {
+      startSectionAttempt(sectionId)
+    } else if (mode === 'memorize') {
+      startMemorizeSectionAttempt(sectionId)
+    } else {
+      return
+    }
+
+    const nextQuery = { ...route.query }
+    delete nextQuery.section
+    delete nextQuery.mode
+    void router.replace({ path: route.path, query: nextQuery })
+  },
+  { immediate: true },
+)
+
 function startSectionAttempt(sectionId: string) {
   launchAttempt(sectionId, 'adaptive')
 }

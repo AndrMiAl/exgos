@@ -41,6 +41,27 @@ const stateExamPdfKnowledgePercent = computed(() => {
 const stateExamPdfVariantQuestionCount = computed(() => Math.min(stateExamPdfSummary.value.availableQuestions, 48))
 const stateExamPdfRandomQuestionCount = computed(() => Math.min(stateExamPdfSummary.value.availableQuestions, 50))
 const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.availableQuestions)
+const sectionCards = computed(() =>
+  examStore.sections
+    .map((section) => {
+      const summary = examStore.getQuestionPoolSummary(ownerId.value, section.id)
+      const percent = summary.totalQuestions === 0
+        ? 0
+        : Math.round((summary.masteredQuestions / summary.totalQuestions) * 100)
+      const shortTitle = section.title.replace(/^Тема\s+\d+\.\s*/u, '')
+
+      return {
+        id: section.id,
+        order: section.order,
+        title: shortTitle,
+        totalQuestions: summary.totalQuestions,
+        availableQuestions: summary.availableQuestions,
+        masteredQuestions: summary.masteredQuestions,
+        percent,
+      }
+    })
+    .sort((left, right) => left.order - right.order),
+)
 </script>
 
 <template>
@@ -89,19 +110,38 @@ const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.a
       </el-card>
     </div>
 
-    <el-alert
-      v-if="activeAttempt"
-      type="info"
-      show-icon
-      :closable="false"
-      title="Есть незавершенная попытка"
-      description="На странице решения можно продолжить ее с того места, где вы остановились, или начать заново."
-    />
+    <section v-if="activeAttempt" class="dashboard-section">
+      <div class="dashboard-section__header">
+        <div>
+          <p class="eyebrow">Продолжение</p>
+          <h2>Незавершенная попытка</h2>
+        </div>
+        <RouterLink :to="{ path: '/practice', query: { resume: 'active' } }">
+          <el-button type="primary" :icon="EditPen">Продолжить попытку</el-button>
+        </RouterLink>
+      </div>
 
-    <el-card v-if="stateExamPdfScope" shadow="never" class="metric-card">
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        title="Прогресс сохранен"
+        description="Можно спокойно посмотреть режимы и темы ниже, а затем вернуться в ту же попытку без потери места."
+      />
+    </section>
+
+    <section v-if="stateExamPdfScope" class="dashboard-section">
+      <div class="dashboard-section__header">
+        <div>
+          <p class="eyebrow">Отдельный набор</p>
+          <h2>Только вопросы из I и II госэкзамена 2026</h2>
+        </div>
+      </div>
+
+      <el-card shadow="never" class="metric-card">
       <div class="dashboard-feature">
         <div class="dashboard-feature__copy">
-          <p class="eyebrow">Отдельный набор из материалов</p>
+          <p class="eyebrow">По двум PDF</p>
           <h2>{{ stateExamPdfScope.title }}</h2>
           <p class="muted">
             Здесь попадают только вопросы из двух PDF с вариантами госэкзамена 2026. Прогресс общий:
@@ -129,9 +169,61 @@ const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.a
           </RouterLink>
         </div>
       </div>
-    </el-card>
+      </el-card>
+    </section>
 
-    <el-card shadow="never" class="metric-card">
+    <section class="dashboard-section">
+      <div class="dashboard-section__header">
+        <div>
+          <p class="eyebrow">Темы</p>
+          <h2>Подготовка по разделам</h2>
+        </div>
+        <RouterLink to="/practice">
+          <el-button :icon="EditPen">Открыть все режимы</el-button>
+        </RouterLink>
+      </div>
+
+      <div class="dashboard-topic-grid">
+        <el-card v-for="card in sectionCards" :key="card.id" shadow="never" class="dashboard-topic-card">
+          <span>Тема {{ card.order }}</span>
+          <strong>{{ card.title }}</strong>
+          <small>
+            Всего: {{ card.totalQuestions }}
+            · Осталось: {{ card.availableQuestions }}
+            · Закреплено: {{ card.masteredQuestions }}
+          </small>
+          <div class="dashboard-topic-card__progress">
+            <div class="dashboard-topic-card__progress-header">
+              <span>Прогресс темы</span>
+              <strong>{{ card.percent }}%</strong>
+            </div>
+            <el-progress :percentage="card.percent" :show-text="false" :stroke-width="8" />
+          </div>
+          <div class="dashboard-topic-card__actions">
+            <RouterLink :to="{ path: '/practice', query: { section: card.id, mode: 'adaptive' } }">
+              <el-button plain :icon="EditPen" :disabled="card.availableQuestions === 0">
+                Решать тему
+              </el-button>
+            </RouterLink>
+            <RouterLink :to="{ path: '/practice', query: { section: card.id, mode: 'memorize' } }">
+              <el-button type="warning" plain :icon="EditPen" :disabled="card.availableQuestions === 0">
+                Заучивать
+              </el-button>
+            </RouterLink>
+          </div>
+        </el-card>
+      </div>
+    </section>
+
+    <section class="dashboard-section">
+      <div class="dashboard-section__header">
+        <div>
+          <p class="eyebrow">Практика</p>
+          <h2>Задачи по разделам</h2>
+        </div>
+      </div>
+
+      <el-card shadow="never" class="metric-card">
       <div class="dashboard-feature">
         <div class="dashboard-feature__copy">
           <p class="eyebrow">Практика по всем разделам</p>
@@ -145,7 +237,8 @@ const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.a
           <el-button :icon="Reading">Открыть все задачи</el-button>
         </RouterLink>
       </div>
-    </el-card>
+      </el-card>
+    </section>
 
     <el-empty
       v-if="totalQuestions === 0"
@@ -159,6 +252,23 @@ const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.a
 </template>
 
 <style scoped>
+.dashboard-section {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.dashboard-section__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dashboard-section__header h2 {
+  margin: 6px 0 0;
+}
+
 .dashboard-feature {
   display: flex;
   align-items: flex-start;
@@ -193,7 +303,57 @@ const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.a
   min-width: 220px;
 }
 
+.dashboard-topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.dashboard-topic-card {
+  border: 1px solid var(--app-border, rgba(148, 163, 184, 0.2));
+}
+
+.dashboard-topic-card :deep(.el-card__body) {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-topic-card span,
+.dashboard-topic-card small {
+  color: var(--app-muted, inherit);
+  font-size: 13px;
+}
+
+.dashboard-topic-card strong {
+  line-height: 1.35;
+}
+
+.dashboard-topic-card__progress {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.dashboard-topic-card__progress-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-topic-card__actions {
+  display: grid;
+  gap: 10px;
+}
+
 @media (max-width: 860px) {
+  .dashboard-section__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .dashboard-feature {
     display: grid;
   }
