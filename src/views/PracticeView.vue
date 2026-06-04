@@ -672,9 +672,7 @@ const mobileFeedbackText = computed(() => {
     return ''
   }
 
-  return currentAnswer.value?.isCorrect
-    ? 'Правильный вариант подсвечен зеленым.'
-    : 'Твой вариант подсвечен красным, правильный — зеленым.'
+  return currentAnswer.value?.isCorrect ? 'Можно идти дальше.' : 'Правильный ответ выделен.'
 })
 const selectedOptionId = computed({
   get() {
@@ -1748,7 +1746,7 @@ watch(
       </div>
 
       <div v-if="showMobileCompactFeedback" class="mobile-next-dock">
-        <div class="mobile-next-dock__status">{{ mobileFeedbackTitle }}. {{ mobileFeedbackText }}</div>
+        <div class="mobile-next-dock__status">{{ mobileFeedbackTitle }}</div>
         <el-button
           type="primary"
           :icon="workingAttempt.currentIndex < workingAttempt.questionIds.length - 1 ? ArrowRight : Finished"
@@ -2359,13 +2357,13 @@ watch(
   box-shadow: 0 14px 28px rgba(2, 8, 23, 0.5);
 }
 
-.answer-option--correct {
+.answer-option.answer-option--correct.el-radio.is-bordered {
   border-color: rgba(34, 197, 94, 0.5) !important;
   background: linear-gradient(180deg, rgba(20, 83, 45, 0.28) 0%, rgba(22, 101, 52, 0.18) 100%) !important;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.18), 0 14px 30px rgba(15, 23, 42, 0.2);
 }
 
-.answer-option--wrong {
+.answer-option.answer-option--wrong.el-radio.is-bordered {
   border-color: rgba(248, 113, 113, 0.5) !important;
   background: linear-gradient(180deg, rgba(127, 29, 29, 0.24) 0%, rgba(69, 10, 10, 0.16) 100%) !important;
   box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.18), 0 14px 30px rgba(15, 23, 42, 0.2);
@@ -2387,16 +2385,26 @@ watch(
   box-shadow: 0 0 0 1px rgba(124, 182, 255, 0.24), 0 14px 30px rgba(2, 8, 23, 0.42);
 }
 
-.practice-page--dark .answer-option--correct {
+.practice-page--dark .answer-option.answer-option--correct.el-radio.is-bordered {
   border-color: rgba(74, 222, 128, 0.5) !important;
   background: linear-gradient(180deg, rgba(13, 58, 40, 0.98) 0%, rgba(12, 44, 31, 0.98) 100%) !important;
   box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.22), 0 14px 30px rgba(2, 8, 23, 0.42);
 }
 
-.practice-page--dark .answer-option--wrong {
+.practice-page--dark .answer-option.answer-option--wrong.el-radio.is-bordered {
   border-color: rgba(248, 113, 113, 0.52) !important;
   background: linear-gradient(180deg, rgba(76, 20, 20, 0.98) 0%, rgba(54, 15, 15, 0.98) 100%) !important;
   box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2), 0 14px 30px rgba(2, 8, 23, 0.42);
+}
+
+.answer-option.answer-option--correct :deep(.el-radio__input .el-radio__inner) {
+  border-color: #4ade80 !important;
+  background: #4ade80 !important;
+}
+
+.answer-option.answer-option--wrong :deep(.el-radio__input .el-radio__inner) {
+  border-color: #f87171 !important;
+  background: #f87171 !important;
 }
 
 .answer-option :deep(.el-radio__label) {
