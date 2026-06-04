@@ -1244,7 +1244,6 @@ watch(
         </el-form-item>
         <el-form-item label="Закрепление">
           <el-radio-group v-model="selectedMasteryTarget" class="mode-toggle">
-            <el-radio :value="1" border>1 раз</el-radio>
             <el-radio :value="2" border>2 раза</el-radio>
             <el-radio :value="3" border>3 раза</el-radio>
           </el-radio-group>

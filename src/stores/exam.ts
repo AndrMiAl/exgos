@@ -26,7 +26,7 @@ const EXAM_STORAGE_KEY = 'gos-exam-progress'
 export const MAX_QUESTIONS_PER_TEST = 50
 export const MIN_QUESTIONS_PER_SECTION = 5
 export const DEFAULT_MASTERED_CORRECT_ANSWERS = 3
-export const MIN_MASTERED_CORRECT_ANSWERS = 1
+export const MIN_MASTERED_CORRECT_ANSWERS = 2
 export const MAX_MASTERED_CORRECT_ANSWERS = 3
 
 interface SectionQuestionPool {

@@ -281,7 +281,7 @@ apiRouter.put('/progress', authRequired, (req, res) => {
     })),
     questionStats,
     masteryProgress,
-    masteryTarget: Number.isNaN(masteryTarget) ? 3 : Math.min(3, Math.max(1, Math.round(masteryTarget))),
+    masteryTarget: Number.isNaN(masteryTarget) ? 3 : Math.min(3, Math.max(2, Math.round(masteryTarget))),
   }
   writeDb(req.db)
   res.json({ ok: true })
