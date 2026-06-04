@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Finished, House, RefreshRight, Select } from '@element-plus/icons-vue'
@@ -33,7 +33,10 @@ const finishDialogVisible = ref(false)
 const saveFinishedStats = ref(true)
 const finishEarly = ref(false)
 const activeExplanationPanels = ref(['details'])
+const isMobileViewport = ref(false)
 const answerLabels = ['а', 'б', 'в', 'г', 'д', 'е', 'ж', 'з']
+let mobileViewportQuery: MediaQueryList | null = null
+let mobileViewportHandler: ((event: MediaQueryListEvent) => void) | null = null
 
 const stateExamPdfScope = getQuestionScopePreset(STATE_EXAM_2026_PDFS_SCOPE_ID)
 
@@ -653,6 +656,26 @@ const answerExplanation = computed(() => {
     isCorrect: Boolean(answer.isCorrect),
   }
 })
+const showImmediateFeedback = computed(() =>
+  Boolean(workingAttempt.value?.mode === 'immediate' && currentAnswer.value?.checkedAt),
+)
+const showMobileCompactFeedback = computed(() => showImmediateFeedback.value && isMobileViewport.value)
+const mobileFeedbackTitle = computed(() => {
+  if (!showMobileCompactFeedback.value) {
+    return ''
+  }
+
+  return currentAnswer.value?.isCorrect ? 'Верно' : 'Неверно'
+})
+const mobileFeedbackText = computed(() => {
+  if (!showMobileCompactFeedback.value) {
+    return ''
+  }
+
+  return currentAnswer.value?.isCorrect
+    ? 'Правильный вариант подсвечен зеленым.'
+    : 'Твой вариант подсвечен красным, правильный — зеленым.'
+})
 const selectedOptionId = computed({
   get() {
     return currentAnswer.value?.selectedOptionId ?? ''
@@ -1050,6 +1073,30 @@ function goToMainMenu() {
   void router.push('/')
 }
 
+function syncMobileViewport(matches: boolean) {
+  isMobileViewport.value = matches
+}
+
+function getImmediateOptionState(optionId: string) {
+  const question = currentQuestion.value
+  const answer = currentAnswer.value
+  const attempt = workingAttempt.value
+
+  if (!question || !answer?.checkedAt || attempt?.mode !== 'immediate') {
+    return null
+  }
+
+  if (optionId === question.correctOptionId) {
+    return 'answer-option--correct'
+  }
+
+  if (optionId === answer.selectedOptionId && !answer.isCorrect) {
+    return 'answer-option--wrong'
+  }
+
+  return null
+}
+
 const finishDialogTitle = computed(() => {
   if (isMemorizationAttempt.value) {
     return finishEarly.value ? 'Остановить заучивание' : 'Завершить заучивание'
@@ -1077,6 +1124,33 @@ function finishAttempt() {
   })
   finishDialogVisible.value = false
 }
+
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return
+  }
+
+  mobileViewportQuery = window.matchMedia('(max-width: 860px)')
+  syncMobileViewport(mobileViewportQuery.matches)
+  mobileViewportHandler = (event: MediaQueryListEvent) => {
+    syncMobileViewport(event.matches)
+  }
+  mobileViewportQuery.addEventListener('change', mobileViewportHandler)
+})
+
+onBeforeUnmount(() => {
+  if (mobileViewportQuery && mobileViewportHandler) {
+    mobileViewportQuery.removeEventListener('change', mobileViewportHandler)
+  }
+})
+
+watch(
+  () => [currentQuestionEntryId.value, currentAnswer.value?.checkedAt, isMobileViewport.value],
+  ([, checkedAt, mobile]) => {
+    activeExplanationPanels.value = mobile && checkedAt ? [] : ['details']
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -1455,7 +1529,7 @@ function finishAttempt() {
             :key="option.id"
             :value="option.id"
             border
-            class="answer-option"
+            :class="['answer-option', getImmediateOptionState(option.id)]"
           >
             <strong>{{ option.displayLabel }}</strong>
             <span>{{ option.displayText }}</span>
@@ -1464,12 +1538,21 @@ function finishAttempt() {
 
         <el-alert
           v-if="workingAttempt.mode === 'immediate' && currentAnswer?.checkedAt"
+          class="question-feedback-alert"
           :type="currentAnswer.isCorrect ? 'success' : 'error'"
           show-icon
           :closable="false"
           :title="currentAnswer.isCorrect ? 'Верно' : 'Неверно'"
           :description="answerExplanation?.short"
         />
+
+        <div
+          v-if="showMobileCompactFeedback"
+          :class="['mobile-feedback-banner', currentAnswer?.isCorrect ? 'mobile-feedback-banner--success' : 'mobile-feedback-banner--error']"
+        >
+          <strong>{{ mobileFeedbackTitle }}</strong>
+          <span>{{ mobileFeedbackText }}</span>
+        </div>
 
         <div
           v-if="workingAttempt.mode === 'immediate' && currentAnswer?.checkedAt"
@@ -1531,7 +1614,10 @@ function finishAttempt() {
           </div>
 
           <el-collapse v-model="activeExplanationPanels" class="answer-study-card__collapse">
-            <el-collapse-item name="details" title="Разобрать тему глубже">
+            <el-collapse-item
+              name="details"
+              :title="answerExplanation.isCorrect ? 'Почему это верно' : 'Почему ответ не подходит'"
+            >
               <div class="answer-study-card__details">
                 <div v-if="answerExplanation.conceptCards.length" class="answer-study-card__section">
                   <h3>Главные понятия в вопросе</h3>
@@ -1658,6 +1744,17 @@ function finishAttempt() {
           @click="openFinishDialog(false)"
         >
           Завершить
+        </el-button>
+      </div>
+
+      <div v-if="showMobileCompactFeedback" class="mobile-next-dock">
+        <div class="mobile-next-dock__status">{{ mobileFeedbackTitle }}. {{ mobileFeedbackText }}</div>
+        <el-button
+          type="primary"
+          :icon="workingAttempt.currentIndex < workingAttempt.questionIds.length - 1 ? ArrowRight : Finished"
+          @click="workingAttempt.currentIndex < workingAttempt.questionIds.length - 1 ? goNext() : openFinishDialog(false)"
+        >
+          {{ quickContinueLabel }}
         </el-button>
       </div>
     </template>
@@ -2262,6 +2359,18 @@ function finishAttempt() {
   box-shadow: 0 14px 28px rgba(2, 8, 23, 0.5);
 }
 
+.answer-option--correct {
+  border-color: rgba(34, 197, 94, 0.5) !important;
+  background: linear-gradient(180deg, rgba(20, 83, 45, 0.28) 0%, rgba(22, 101, 52, 0.18) 100%) !important;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.18), 0 14px 30px rgba(15, 23, 42, 0.2);
+}
+
+.answer-option--wrong {
+  border-color: rgba(248, 113, 113, 0.5) !important;
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.24) 0%, rgba(69, 10, 10, 0.16) 100%) !important;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.18), 0 14px 30px rgba(15, 23, 42, 0.2);
+}
+
 .practice-page--dark .answer-option.el-radio.is-bordered {
   background: linear-gradient(180deg, rgba(18, 32, 54, 0.98) 0%, rgba(14, 26, 44, 0.98) 100%) !important;
   border-color: rgba(110, 142, 189, 0.24) !important;
@@ -2276,6 +2385,18 @@ function finishAttempt() {
 .practice-page--dark .answer-option.is-checked {
   border-color: rgba(124, 182, 255, 0.5) !important;
   box-shadow: 0 0 0 1px rgba(124, 182, 255, 0.24), 0 14px 30px rgba(2, 8, 23, 0.42);
+}
+
+.practice-page--dark .answer-option--correct {
+  border-color: rgba(74, 222, 128, 0.5) !important;
+  background: linear-gradient(180deg, rgba(13, 58, 40, 0.98) 0%, rgba(12, 44, 31, 0.98) 100%) !important;
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.22), 0 14px 30px rgba(2, 8, 23, 0.42);
+}
+
+.practice-page--dark .answer-option--wrong {
+  border-color: rgba(248, 113, 113, 0.52) !important;
+  background: linear-gradient(180deg, rgba(76, 20, 20, 0.98) 0%, rgba(54, 15, 15, 0.98) 100%) !important;
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2), 0 14px 30px rgba(2, 8, 23, 0.42);
 }
 
 .answer-option :deep(.el-radio__label) {
@@ -2326,6 +2447,40 @@ function finishAttempt() {
 .question-card :deep(.el-alert__description) {
   font-size: 17px;
   line-height: 1.7;
+}
+
+.mobile-feedback-banner,
+.mobile-next-dock {
+  display: none;
+}
+
+.mobile-feedback-banner {
+  gap: 4px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--practice-border);
+  border-radius: 18px;
+  background: var(--practice-panel-soft-bg);
+}
+
+.mobile-feedback-banner strong {
+  color: var(--practice-text-strong);
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.mobile-feedback-banner span {
+  color: var(--practice-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.mobile-feedback-banner--success {
+  border-color: rgba(34, 197, 94, 0.32);
+}
+
+.mobile-feedback-banner--error {
+  border-color: rgba(248, 113, 113, 0.32);
 }
 
 .quick-next-bar {
@@ -2810,6 +2965,14 @@ function finishAttempt() {
     gap: 10px;
   }
 
+  .practice-page--attempting .question-feedback-alert {
+    display: none;
+  }
+
+  .practice-page--attempting .mobile-feedback-banner {
+    display: grid;
+  }
+
   .answer-option {
     min-height: 0;
     padding: 12px 14px;
@@ -2843,9 +3006,28 @@ function finishAttempt() {
     padding: 16px;
   }
 
+  .practice-page--attempting .answer-study-card {
+    gap: 0;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 20px;
+  }
+
+  .practice-page--attempting .answer-study-card__brief {
+    display: none;
+  }
+
+  .practice-page--attempting .answer-study-card__collapse {
+    border-top: 0;
+  }
+
+  .practice-page--attempting .answer-study-card__collapse:deep(.el-collapse-item__header) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
   .practice-page--attempting .quick-next-bar {
-    padding: 14px;
-    border-radius: 18px;
+    display: none;
   }
 
   .quick-next-bar {
@@ -2912,6 +3094,7 @@ function finishAttempt() {
   .practice-page--attempting .attempt-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+    padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
   }
 
   .practice-page--attempting .attempt-actions .el-button {
@@ -2939,6 +3122,34 @@ function finishAttempt() {
   .practice-page--attempting .attempt-actions__primary {
     order: 5;
     grid-column: 1 / -1;
+  }
+
+  .practice-page--attempting .mobile-next-dock {
+    position: fixed;
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    z-index: 29;
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border: 1px solid rgba(96, 165, 250, 0.24);
+    border-radius: 18px;
+    background: rgba(10, 21, 37, 0.96);
+    box-shadow: 0 18px 32px rgba(2, 8, 23, 0.4);
+    backdrop-filter: blur(18px);
+  }
+
+  .practice-page--attempting .mobile-next-dock__status {
+    color: #d7e5fb;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .practice-page--attempting .mobile-next-dock .el-button {
+    width: 100%;
+    min-height: 46px;
+    font-size: 16px;
   }
 }
 </style>
