@@ -1268,10 +1268,10 @@ watch(
       <div v-if="activeAttempt" class="resume-panel">
         <div class="section-block__header section-block__header--compact">
           <div>
-            <p class="eyebrow">РџСЂРѕРґРѕР»Р¶РµРЅРёРµ</p>
-            <h3>РќРµР·Р°РІРµСЂС€РµРЅРЅР°СЏ РїРѕРїС‹С‚РєР°</h3>
+            <p class="eyebrow">Продолжение</p>
+            <h3>Незавершенная попытка</h3>
           </div>
-          <el-button size="large" type="primary" @click="resumeAttempt">РџСЂРѕРґРѕР»Р¶РёС‚СЊ РїРѕРїС‹С‚РєСѓ</el-button>
+          <el-button size="large" type="primary" @click="resumeAttempt">Продолжить попытку</el-button>
         </div>
         <el-alert
           type="info"
@@ -1279,9 +1279,9 @@ watch(
           :closable="false"
           class="resume-attempt-alert"
         >
-          <template #title>РњРѕР¶РЅРѕ РІРµСЂРЅСѓС‚СЊСЃСЏ Р±РµР· РїРѕС‚РµСЂРё РїСЂРѕРіСЂРµСЃСЃР°</template>
+          <template #title>Можно вернуться без потери прогресса</template>
           <template #default>
-            РЎРЅР°С‡Р°Р»Р° РјРѕР¶РЅРѕ РїРѕСЃРјРѕС‚СЂРµС‚СЊ РѕР±Р·РѕСЂ С‚РµРј Рё РІС‹Р±СЂР°С‚СЊ СЂРµР¶РёРј, Р° РїРѕС‚РѕРј РІ Р»СЋР±РѕР№ РјРѕРјРµРЅС‚ РїСЂРѕРґРѕР»Р¶РёС‚СЊ СЌС‚Сѓ РїРѕРїС‹С‚РєСѓ СЃ С‚РѕРіРѕ Р¶Рµ РјРµСЃС‚Р°.
+            Сначала можно посмотреть обзор тем и выбрать режим, а потом в любой момент продолжить эту попытку с того же места.
           </template>
         </el-alert>
       </div>
@@ -1289,11 +1289,11 @@ watch(
       <section class="section-block">
         <div class="section-block__header">
           <div>
-            <p class="eyebrow">РћСЃРЅРѕРІРЅРѕРµ</p>
-            <h3>РћР±С‰РёРµ СЂРµР¶РёРјС‹ РїРѕРґРіРѕС‚РѕРІРєРё</h3>
+            <p class="eyebrow">Основное</p>
+            <h3>Общие режимы подготовки</h3>
           </div>
           <p class="muted section-block__hint">
-            Р—РґРµСЃСЊ Р±С‹СЃС‚СЂС‹Р№ СЃС‚Р°СЂС‚: РѕР±С‹С‡РЅС‹Р№ РїСЂРѕС…РѕРґ, Р·Р°СѓС‡РёРІР°РЅРёРµ Рё РёС‚РѕРіРѕРІС‹Р№ Р“Р­Рљ.
+            Здесь быстрый старт: обычный проход, заучивание и итоговый ГЭК.
           </p>
         </div>
 
@@ -1411,11 +1411,11 @@ watch(
       <section v-if="stateExamPdfScope" class="section-block">
         <div class="section-block__header">
           <div>
-            <p class="eyebrow">РСЃС‚РѕС‡РЅРёРєРё</p>
+            <p class="eyebrow">Источники</p>
             <h3>{{ stateExamPdfScope.shortTitle }}</h3>
           </div>
           <p class="muted section-block__hint">
-            Р­С‚Рѕ РѕС‚РґРµР»СЊРЅС‹Р№ РЅР°Р±РѕСЂ С‚РѕР»СЊРєРѕ РёР· РґРІСѓС… PDF, РЅРѕ РµРіРѕ Р·Р°РєСЂРµРїР»РµРЅРёРµ РІСЃРµ СЂР°РІРЅРѕ РёРґРµС‚ РІ РѕР±С‰СѓСЋ СЃС‚Р°С‚РёСЃС‚РёРєСѓ.
+            Это отдельный набор только из двух PDF, но его закрепление все равно идет в общую статистику.
           </p>
         </div>
 
@@ -1496,28 +1496,13 @@ watch(
       <section class="section-block">
         <div class="section-block__header">
           <div>
-            <p class="eyebrow">Р Р°Р·РґРµР»С‹</p>
-            <h3>РўРѕС‡РµС‡РЅР°СЏ С‚СЂРµРЅРёСЂРѕРІРєР° РїРѕ С‚РµРјР°Рј</h3>
+            <p class="eyebrow">Разделы</p>
+            <h3>Точечная тренировка по темам</h3>
           </div>
           <p class="muted section-block__hint">
-            Р—Р°РїСѓСЃРєР°Р№С‚Рµ РѕС‚РґРµР»СЊРЅС‹Р№ СЂР°Р·РґРµР» РёР»Рё СЃСЂР°Р·Сѓ РІРєР»СЋС‡Р°Р№С‚Рµ РїРѕРІС‚РѕСЂРµРЅРёРµ РґРѕ Р·Р°РєСЂРµРїР»РµРЅРёСЏ.
+            Запускайте отдельный раздел или сразу включайте повторение до закрепления.
           </p>
         </div>
-
-      <div v-if="false && activeAttempt" class="button-row">
-        <el-alert
-          type="info"
-          show-icon
-          :closable="false"
-          class="resume-attempt-alert"
-        >
-          <template #title>Незавершенная попытка</template>
-          <template #default>
-            Обзор тем уже доступен ниже. Текущую попытку можно в любой момент продолжить с того же места.
-          </template>
-        </el-alert>
-        <el-button size="large" type="primary" @click="resumeAttempt">Продолжить попытку</el-button>
-      </div>
 
       <div class="section-picker">
         <el-card
