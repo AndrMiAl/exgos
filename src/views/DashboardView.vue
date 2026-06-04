@@ -206,7 +206,9 @@ const sectionCards = computed<TopicCardViewModel[]>(() =>
       const percent = summary.totalQuestions === 0
         ? 0
         : Math.round((summary.masteredQuestions / summary.totalQuestions) * 100)
-      const shortTitle = section.title.replace(/^Тема\s+\d+\.\s*/u, '')
+      const shortTitle = section.title
+        .replace(/^Тема\s+\d+\.\s*/u, '')
+        .replace(/:\s*\d+\s+тестовых\s+вопросов$/u, '')
       const sectionQuestionIds = new Set(section.questions.map((question) => question.id))
       const touchedQuestions = Object.values(questionStats.value).filter((stat) => sectionQuestionIds.has(stat.questionId)).length
       const status = getTopicStatus(percent, touchedQuestions, summary.availableQuestions)
@@ -226,6 +228,8 @@ const sectionCards = computed<TopicCardViewModel[]>(() =>
     })
     .sort((left, right) => left.order - right.order),
 )
+
+const touchedTopicPreview = computed(() => todaySnapshot.value.touchedSectionTitles.slice(0, 4))
 
 function resetActiveAttempt() {
   if (!activeAttempt.value) {
@@ -283,8 +287,8 @@ function resetActiveAttempt() {
       </el-card>
     </div>
 
-    <section v-if="activeAttemptProgress" class="dashboard-section">
-      <div class="dashboard-attempt-banner">
+    <section class="dashboard-highlight-grid" :class="{ 'dashboard-highlight-grid--single': !activeAttemptProgress }">
+      <div v-if="activeAttemptProgress" class="dashboard-attempt-banner">
         <div class="dashboard-attempt-banner__copy">
           <p class="eyebrow">Сейчас в работе</p>
           <h2>{{ activeAttemptProgress.sectionTitle }}</h2>
@@ -301,35 +305,44 @@ function resetActiveAttempt() {
           <el-button plain :icon="RefreshRight" @click="resetActiveAttempt">Сбросить</el-button>
         </div>
       </div>
-    </section>
 
-    <section class="dashboard-section">
-      <div class="dashboard-section__header">
-        <div>
-          <p class="eyebrow">Сегодня</p>
-          <h2>Прогресс за день</h2>
+      <el-card shadow="never" class="dashboard-today-panel">
+        <div class="dashboard-today-panel__header">
+          <div>
+            <p class="eyebrow">Сегодня</p>
+            <h2>Прогресс за день</h2>
+          </div>
+          <span class="dashboard-today-panel__badge">{{ todaySnapshot.answeredCount }} ответов</span>
         </div>
-      </div>
 
-      <div class="dashboard-today-grid">
-        <el-card shadow="never" class="dashboard-today-card">
-          <span>Отвечено сегодня</span>
-          <strong>{{ todaySnapshot.answeredCount }}</strong>
-          <small>Уникальных вопросов, которые вы уже потрогали сегодня.</small>
-        </el-card>
-        <el-card shadow="never" class="dashboard-today-card">
-          <span>Закреплено сегодня</span>
-          <strong>{{ todaySnapshot.masteredCount }}</strong>
-          <small>Вопросов, которые сегодня дошли до целевого закрепления.</small>
-        </el-card>
-        <el-card shadow="never" class="dashboard-today-card">
-          <span>Темы сегодня</span>
-          <strong>{{ todaySnapshot.touchedSectionTitles.length }}</strong>
-          <small>
-            {{ todaySnapshot.touchedSectionTitles.length > 0 ? todaySnapshot.touchedSectionTitles.join(' · ') : 'Пока ни одну тему не трогали.' }}
+        <div class="dashboard-today-grid">
+          <div class="dashboard-today-stat">
+            <span>Отвечено</span>
+            <strong>{{ todaySnapshot.answeredCount }}</strong>
+          </div>
+          <div class="dashboard-today-stat">
+            <span>Закреплено</span>
+            <strong>{{ todaySnapshot.masteredCount }}</strong>
+          </div>
+          <div class="dashboard-today-stat">
+            <span>Тем затронуто</span>
+            <strong>{{ todaySnapshot.touchedSectionTitles.length }}</strong>
+          </div>
+        </div>
+
+        <div class="dashboard-today-topics">
+          <span class="dashboard-today-topics__label">Темы сегодня</span>
+          <div v-if="touchedTopicPreview.length > 0" class="dashboard-today-topics__chips">
+            <span v-for="title in touchedTopicPreview" :key="title">{{ title }}</span>
+          </div>
+          <small v-if="todaySnapshot.touchedSectionTitles.length > touchedTopicPreview.length">
+            и еще {{ todaySnapshot.touchedSectionTitles.length - touchedTopicPreview.length }}
           </small>
-        </el-card>
-      </div>
+          <small v-else-if="touchedTopicPreview.length === 0">
+            Пока ни одну тему не трогали.
+          </small>
+        </div>
+      </el-card>
     </section>
 
     <section v-if="stateExamPdfScope" class="dashboard-section">
@@ -379,7 +392,7 @@ function resetActiveAttempt() {
         <div>
           <p class="eyebrow">Темы</p>
           <h2>Подготовка по разделам</h2>
-          <p class="muted dashboard-section__subtitle">Можно смотреть как сеткой карточек, так и компактным списком.</p>
+          <p class="muted dashboard-section__subtitle">Если экран широкий, плитки смотрятся лучше. Если нужен быстрый обзор, переключайтесь в список.</p>
         </div>
         <div class="dashboard-layout-toggle">
           <el-radio-group v-model="topicLayout" size="large">
@@ -400,12 +413,12 @@ function resetActiveAttempt() {
               {{ card.statusLabel }}
             </span>
           </div>
-          <small>
-            Всего: {{ card.totalQuestions }}
-            · Осталось: {{ card.availableQuestions }}
-            · Закреплено: {{ card.masteredQuestions }}
-            · Уже трогали вопросов: {{ card.touchedQuestions }}
-          </small>
+          <div class="dashboard-topic-card__facts">
+            <span>Всего: {{ card.totalQuestions }}</span>
+            <span>Осталось: {{ card.availableQuestions }}</span>
+            <span>Закреплено: {{ card.masteredQuestions }}</span>
+            <span>Уже трогали: {{ card.touchedQuestions }}</span>
+          </div>
           <div class="dashboard-topic-card__progress">
             <div class="dashboard-topic-card__progress-header">
               <span>Прогресс темы</span>
@@ -492,6 +505,17 @@ function resetActiveAttempt() {
   margin-top: 10px;
 }
 
+.dashboard-highlight-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.95fr);
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.dashboard-highlight-grid--single {
+  grid-template-columns: 1fr;
+}
+
 .dashboard-attempt-banner {
   display: flex;
   align-items: center;
@@ -515,29 +539,87 @@ function resetActiveAttempt() {
   flex-wrap: wrap;
 }
 
+.dashboard-today-panel {
+  border: 1px solid var(--app-border, rgba(148, 163, 184, 0.2));
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 26%),
+    linear-gradient(180deg, rgba(14, 25, 42, 0.9) 0%, rgba(11, 20, 34, 0.98) 100%);
+}
+
+.dashboard-today-panel :deep(.el-card__body) {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-today-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dashboard-today-panel__header h2 {
+  margin: 6px 0 0;
+}
+
+.dashboard-today-panel__badge {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .dashboard-today-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
-.dashboard-today-card {
-  border: 1px solid var(--app-border, rgba(148, 163, 184, 0.2));
+.dashboard-today-stat {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-.dashboard-today-card :deep(.el-card__body) {
+.dashboard-today-stat span {
+  color: var(--app-muted, inherit);
+  font-size: 13px;
+}
+
+.dashboard-today-stat strong {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.dashboard-today-topics {
   display: grid;
   gap: 10px;
 }
 
-.dashboard-today-card span,
-.dashboard-today-card small {
+.dashboard-today-topics__label {
   color: var(--app-muted, inherit);
+  font-size: 13px;
 }
 
-.dashboard-today-card strong {
-  font-size: 34px;
-  line-height: 1;
+.dashboard-today-topics__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dashboard-today-topics__chips span {
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .dashboard-feature {
@@ -580,7 +662,7 @@ function resetActiveAttempt() {
 
 .dashboard-topic-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -595,6 +677,7 @@ function resetActiveAttempt() {
 .dashboard-topic-card :deep(.el-card__body) {
   display: grid;
   gap: 12px;
+  height: 100%;
 }
 
 .dashboard-topic-card span,
@@ -604,7 +687,11 @@ function resetActiveAttempt() {
 }
 
 .dashboard-topic-card strong {
+  display: -webkit-box;
   line-height: 1.35;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 .dashboard-topic-card__head {
@@ -648,6 +735,20 @@ function resetActiveAttempt() {
   color: #86efac;
 }
 
+.dashboard-topic-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-topic-card__facts span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  line-height: 1.2;
+}
+
 .dashboard-topic-card__progress {
   display: grid;
   gap: 8px;
@@ -668,8 +769,33 @@ function resetActiveAttempt() {
   gap: 10px;
 }
 
+.dashboard-topic-card__actions a {
+  display: block;
+}
+
+.dashboard-topic-card__actions :deep(.el-button) {
+  width: 100%;
+}
+
+@media (max-width: 1500px) {
+  .dashboard-topic-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .dashboard-highlight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-today-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 860px) {
   .dashboard-section__header,
+  .dashboard-today-panel__header,
   .dashboard-attempt-banner,
   .dashboard-topic-card__head {
     align-items: flex-start;
@@ -683,10 +809,6 @@ function resetActiveAttempt() {
   .dashboard-feature__actions,
   .dashboard-today-grid {
     min-width: 0;
-  }
-
-  .dashboard-today-grid {
-    grid-template-columns: 1fr;
   }
 
   .dashboard-layout-toggle {
