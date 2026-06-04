@@ -661,6 +661,17 @@ export const useExamStore = defineStore('exam', {
       attempt.completedAt = now
       this.persist()
     },
+    abandonAttempt(attemptId: string) {
+      const attempt = this.attempts.find((candidate) => candidate.id === attemptId)
+
+      if (!attempt || attempt.status !== 'active') {
+        return
+      }
+
+      attempt.status = 'abandoned'
+      attempt.updatedAt = new Date().toISOString()
+      this.persist()
+    },
     clearStatistics(ownerId: string) {
       this.attempts = this.attempts.filter((attempt) => attempt.ownerId !== ownerId)
       this.questionStatsByOwner[ownerId] = {}
