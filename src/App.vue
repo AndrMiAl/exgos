@@ -146,11 +146,11 @@ onBeforeUnmount(() => {
       </RouterLink>
       <RouterLink to="/practice" class="mobile-tab" :class="{ active: activePath === '/practice' }">
         <el-icon><EditPen /></el-icon>
-        <span>Решение</span>
+        <span>Тест</span>
       </RouterLink>
       <RouterLink to="/materials" class="mobile-tab" :class="{ active: activePath === '/materials' }">
         <el-icon><Document /></el-icon>
-        <span>Материалы</span>
+        <span>Мат-лы</span>
       </RouterLink>
       <RouterLink to="/tasks" class="mobile-tab" :class="{ active: activePath === '/tasks' }">
         <el-icon><Reading /></el-icon>

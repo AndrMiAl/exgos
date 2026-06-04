@@ -1080,7 +1080,10 @@ function finishAttempt() {
 </script>
 
 <template>
-  <section class="page practice-page" :class="practiceThemeClass">
+  <section
+    class="page practice-page"
+    :class="[practiceThemeClass, { 'practice-page--attempting': Boolean(workingAttempt?.status === 'active' && currentQuestion) }]"
+  >
     <div class="page-heading">
       <div>
         <p class="eyebrow">Тестирование</p>
@@ -1436,7 +1439,7 @@ function finishAttempt() {
         </div>
       </div>
 
-      <el-progress :percentage="progressPercent" :show-text="false" />
+      <el-progress class="attempt-progress" :percentage="progressPercent" :show-text="false" />
 
       <el-card shadow="never" class="question-card">
         <h2>{{ currentQuestionPrompt }}</h2>
@@ -1622,15 +1625,24 @@ function finishAttempt() {
       </el-card>
 
       <div class="attempt-actions">
-        <el-button :icon="ArrowLeft" :disabled="workingAttempt.currentIndex === 0" @click="goPrevious">
+        <el-button
+          v-if="workingAttempt.currentIndex > 0"
+          class="attempt-actions__back"
+          :icon="ArrowLeft"
+          @click="goPrevious"
+        >
           Назад
         </el-button>
-        <el-button class="desktop-early-finish" :icon="Finished" @click="openFinishDialog(true)">Завершить досрочно</el-button>
-        <el-button :icon="House" @click="goToPracticeOverview">К обзору тем</el-button>
-        <el-button :icon="House" @click="goToMainMenu">В главное меню</el-button>
+        <el-button class="desktop-early-finish attempt-actions__finish-early" :icon="Finished" @click="openFinishDialog(true)">
+          Завершить досрочно
+        </el-button>
+        <el-button class="attempt-actions__overview" :icon="House" @click="goToPracticeOverview">К обзору тем</el-button>
+        <el-button class="attempt-actions__menu" :icon="House" @click="goToMainMenu">В главное меню</el-button>
+        <el-button class="attempt-actions__restart mobile-only" :icon="RefreshRight" @click="restartAttempt">Начать заново</el-button>
         <div class="spacer" />
         <el-button
           v-if="workingAttempt.currentIndex < workingAttempt.questionIds.length - 1"
+          class="attempt-actions__primary"
           type="primary"
           :icon="ArrowRight"
           :disabled="!currentAnswer"
@@ -1638,7 +1650,15 @@ function finishAttempt() {
         >
           Далее
         </el-button>
-        <el-button v-else type="primary" :disabled="!currentAnswer" @click="openFinishDialog(false)">Завершить</el-button>
+        <el-button
+          v-else
+          class="attempt-actions__primary"
+          type="primary"
+          :disabled="!currentAnswer"
+          @click="openFinishDialog(false)"
+        >
+          Завершить
+        </el-button>
       </div>
     </template>
 
@@ -2142,6 +2162,10 @@ function finishAttempt() {
   background: var(--practice-meta-title-bg);
   color: var(--practice-meta-title-text);
   border-color: var(--practice-meta-title-border);
+}
+
+.mobile-only {
+  display: none;
 }
 
 .practice-page--dark .setup-card,
@@ -2657,20 +2681,66 @@ function finishAttempt() {
 }
 
 @media (max-width: 860px) {
+  .practice-page--attempting {
+    gap: 12px;
+  }
+
+  .practice-page--attempting .page-heading {
+    display: none;
+  }
+
+  .practice-page--attempting .attempt-toolbar {
+    gap: 8px;
+  }
+
   .attempt-toolbar__count {
     font-size: 22px;
   }
 
+  .practice-page--attempting .attempt-toolbar__count {
+    font-size: 18px;
+  }
+
   .attempt-toolbar__meta {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    margin: 0 -2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .attempt-toolbar__meta::-webkit-scrollbar {
+    display: none;
   }
 
   .attempt-meta {
+    flex: 0 0 auto;
+    white-space: nowrap;
     min-height: 0;
     padding: 10px 12px;
     border-radius: 16px;
     font-size: 14px;
+  }
+
+  .practice-page--attempting .attempt-meta {
+    min-height: 32px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+  }
+
+  .practice-page--attempting .attempt-meta--title {
+    max-width: min(78vw, 320px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .practice-page--attempting .toolbar-actions {
+    display: none;
   }
 
   .knowledge-hero {
@@ -2703,15 +2773,51 @@ function finishAttempt() {
     grid-template-columns: 1fr;
   }
 
+  .practice-page--attempting .attempt-progress {
+    margin-top: -2px;
+  }
+
+  .practice-page--attempting .question-card {
+    border-radius: 22px;
+  }
+
+  .practice-page--attempting .question-card :deep(.el-card__body) {
+    padding: 14px 14px 16px;
+  }
+
   .question-card :deep(h2) {
     font-size: 21px;
     line-height: 1.4;
+  }
+
+  .practice-page--attempting .question-card :deep(h2),
+  .practice-page--attempting .question-card h2 {
+    margin-bottom: 16px;
+    font-size: 18px;
+    line-height: 1.38;
+  }
+
+  .practice-page--attempting .question-code-block {
+    margin-bottom: 16px;
+    padding: 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .practice-page--attempting .answers-list {
+    margin: 14px 0 0;
+    gap: 10px;
   }
 
   .answer-option {
     min-height: 0;
     padding: 12px 14px;
     border-radius: 16px;
+  }
+
+  .practice-page--attempting .answer-option {
+    padding: 10px 12px;
   }
 
   .answer-option :deep(.el-radio__label) {
@@ -2723,13 +2829,37 @@ function finishAttempt() {
     line-height: 1.65;
   }
 
+  .practice-page--attempting .answer-option :deep(.el-radio__label) {
+    gap: 8px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .practice-page--attempting .answer-option strong {
+    font-size: 16px;
+  }
+
   .answer-study-card {
     padding: 16px;
+  }
+
+  .practice-page--attempting .quick-next-bar {
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .quick-next-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .practice-page--attempting .quick-next-bar__content strong {
+    font-size: 18px;
+  }
+
+  .practice-page--attempting .quick-next-bar__content span {
+    font-size: 14px;
+    line-height: 1.55;
   }
 
   .answer-study-card__brief strong {
@@ -2773,6 +2903,42 @@ function finishAttempt() {
   .answer-usage-card {
     padding: 14px;
     border-radius: 16px;
+  }
+
+  .mobile-only {
+    display: inline-flex;
+  }
+
+  .practice-page--attempting .attempt-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .practice-page--attempting .attempt-actions .el-button {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .practice-page--attempting .attempt-actions__overview {
+    order: 1;
+  }
+
+  .practice-page--attempting .attempt-actions__menu {
+    order: 2;
+  }
+
+  .practice-page--attempting .attempt-actions__restart {
+    order: 3;
+  }
+
+  .practice-page--attempting .attempt-actions__back {
+    order: 4;
+  }
+
+  .practice-page--attempting .attempt-actions__primary {
+    order: 5;
+    grid-column: 1 / -1;
   }
 }
 </style>
