@@ -10,6 +10,7 @@ import type {
   AnswerOption,
   AttemptAnswer,
   ExamQuestion,
+  MasteryProgressState,
   QuestionSelectionMode,
   QuestionSection,
   QuestionStat,
@@ -24,7 +25,9 @@ import { loadJson, saveJson } from '@/utils/storage'
 const EXAM_STORAGE_KEY = 'gos-exam-progress'
 export const MAX_QUESTIONS_PER_TEST = 50
 export const MIN_QUESTIONS_PER_SECTION = 5
-export const MASTERED_CORRECT_ANSWERS = 3
+export const DEFAULT_MASTERED_CORRECT_ANSWERS = 3
+export const MIN_MASTERED_CORRECT_ANSWERS = 1
+export const MAX_MASTERED_CORRECT_ANSWERS = 3
 
 interface SectionQuestionPool {
   id: string
@@ -199,11 +202,23 @@ function getOptionIdsForDifficulty(question: ExamQuestion, difficulty: TestDiffi
 interface ExamProgressState {
   attempts: TestAttempt[]
   questionStatsByOwner: Record<string, Record<string, QuestionStat>>
+  masteryProgressByOwner: Record<string, Record<string, number>>
+  masteryTargetByOwner: Record<string, number>
 }
 
 interface ExamState extends ExamProgressState {
   sections: QuestionSection[]
   materials: StudyMaterial[]
+}
+
+function clampMasteryTarget(value?: number) {
+  const numericValue = Number(value ?? DEFAULT_MASTERED_CORRECT_ANSWERS)
+
+  if (Number.isNaN(numericValue)) {
+    return DEFAULT_MASTERED_CORRECT_ANSWERS
+  }
+
+  return Math.min(MAX_MASTERED_CORRECT_ANSWERS, Math.max(MIN_MASTERED_CORRECT_ANSWERS, Math.round(numericValue)))
 }
 
 interface FinishAttemptOptions {
@@ -217,6 +232,8 @@ export const useExamStore = defineStore('exam', {
     materials: studyMaterials,
     attempts: [],
     questionStatsByOwner: {},
+    masteryProgressByOwner: {},
+    masteryTargetByOwner: {},
   }),
   getters: {
     allQuestions: (state): ExamQuestion[] => state.sections.flatMap((section) => section.questions),
@@ -233,7 +250,7 @@ export const useExamStore = defineStore('exam', {
       const authStore = useAuthStore()
 
       if (authStore.token && authStore.currentUser) {
-        const saved = await apiRequest<{ attempts: TestAttempt[]; questionStats: Record<string, QuestionStat> }>(
+        const saved = await apiRequest<MasteryProgressState>(
           '/progress',
           {},
           authStore.token,
@@ -242,16 +259,36 @@ export const useExamStore = defineStore('exam', {
         this.questionStatsByOwner = {
           [authStore.currentUser.id]: saved.questionStats,
         }
+        this.masteryProgressByOwner = {
+          [authStore.currentUser.id]: saved.masteryProgress ?? {},
+        }
+        this.masteryTargetByOwner = {
+          [authStore.currentUser.id]: clampMasteryTarget(saved.masteryTarget),
+        }
         return
       }
 
-      const saved = loadJson<ExamProgressState & { questionStats?: Record<string, QuestionStat> }>(EXAM_STORAGE_KEY, {
+      const saved = loadJson<
+        ExamProgressState & {
+          questionStats?: Record<string, QuestionStat>
+          masteryProgress?: Record<string, number>
+          masteryTarget?: number
+        }
+      >(EXAM_STORAGE_KEY, {
         attempts: [],
         questionStatsByOwner: {},
+        masteryProgressByOwner: {},
+        masteryTargetByOwner: {},
       })
       this.attempts = saved.attempts
       this.questionStatsByOwner = {
         guest: saved.questionStatsByOwner?.guest ?? saved.questionStats ?? {},
+      }
+      this.masteryProgressByOwner = {
+        guest: saved.masteryProgressByOwner?.guest ?? saved.masteryProgress ?? {},
+      }
+      this.masteryTargetByOwner = {
+        guest: clampMasteryTarget(saved.masteryTargetByOwner?.guest ?? saved.masteryTarget),
       }
     },
     persist() {
@@ -266,6 +303,8 @@ export const useExamStore = defineStore('exam', {
             body: JSON.stringify({
               attempts: this.attempts.filter((attempt) => attempt.ownerId === userId),
               questionStats: this.questionStatsByOwner[userId] ?? {},
+              masteryProgress: this.masteryProgressByOwner[userId] ?? {},
+              masteryTarget: this.getMasteryTarget(userId),
             }),
           },
           authStore.token,
@@ -278,10 +317,29 @@ export const useExamStore = defineStore('exam', {
         questionStatsByOwner: {
           guest: this.questionStatsByOwner.guest ?? {},
         },
+        masteryProgressByOwner: {
+          guest: this.masteryProgressByOwner.guest ?? {},
+        },
+        masteryTargetByOwner: {
+          guest: this.getMasteryTarget('guest'),
+        },
       })
     },
     getQuestionStats(ownerId: string) {
       return this.questionStatsByOwner[ownerId] ?? {}
+    },
+    getQuestionMasteryProgress(ownerId: string) {
+      return this.masteryProgressByOwner[ownerId] ?? {}
+    },
+    getQuestionMasteryCount(ownerId: string, questionId: string) {
+      return this.getQuestionMasteryProgress(ownerId)[questionId] ?? 0
+    },
+    getMasteryTarget(ownerId: string) {
+      return clampMasteryTarget(this.masteryTargetByOwner[ownerId])
+    },
+    setMasteryTarget(ownerId: string, target: number) {
+      this.masteryTargetByOwner[ownerId] = clampMasteryTarget(target)
+      this.persist()
     },
     resolveAttemptQuestionId(attempt: TestAttempt, questionEntryId: string) {
       return attempt.questionRefsByEntryId?.[questionEntryId] ?? questionEntryId
@@ -324,6 +382,7 @@ export const useExamStore = defineStore('exam', {
 
       const recordedAt = answer.checkedAt ?? answer.answeredAt
       this.recordQuestionStat(attempt.ownerId, question, answer, attempt.difficulty ?? 'hard')
+      this.recordQuestionMastery(attempt.ownerId, question.id, Boolean(answer.isCorrect))
       answer.statsRecordedAt = recordedAt
       attempt.statsRecordedAt ??= recordedAt
     },
@@ -345,8 +404,7 @@ export const useExamStore = defineStore('exam', {
       this.appendQuestionToAttempt(attempt, nextQuestion)
     },
     isQuestionMastered(ownerId: string, questionId: string) {
-      const questionStat = this.getQuestionStats(ownerId)[questionId]
-      return (questionStat?.correctAnswers ?? 0) >= MASTERED_CORRECT_ANSWERS
+      return this.getQuestionMasteryCount(ownerId, questionId) >= this.getMasteryTarget(ownerId)
     },
     getQuestionsForSection(
       sectionId: string | 'all',
@@ -606,6 +664,21 @@ export const useExamStore = defineStore('exam', {
     clearStatistics(ownerId: string) {
       this.attempts = this.attempts.filter((attempt) => attempt.ownerId !== ownerId)
       this.questionStatsByOwner[ownerId] = {}
+      this.masteryProgressByOwner[ownerId] = {}
+      this.persist()
+    },
+    resetMasteryProgress(ownerId: string, sectionId: string | 'all', questionScopeId?: string) {
+      const ownerProgress = { ...(this.masteryProgressByOwner[ownerId] ?? {}) }
+      const targetQuestions = this.getQuestionsForSection(sectionId, {
+        includeMastered: true,
+        questionScopeId,
+      })
+
+      for (const question of targetQuestions) {
+        delete ownerProgress[question.id]
+      }
+
+      this.masteryProgressByOwner[ownerId] = ownerProgress
       this.persist()
     },
     recordQuestionStat(ownerId: string, question: ExamQuestion, answer: AttemptAnswer, difficulty: TestDifficulty) {
@@ -636,6 +709,15 @@ export const useExamStore = defineStore('exam', {
       }
       ownerStats[question.id] = current
       this.questionStatsByOwner[ownerId] = ownerStats
+    },
+    recordQuestionMastery(ownerId: string, questionId: string, isCorrect: boolean) {
+      if (!isCorrect) {
+        return
+      }
+
+      const ownerProgress = this.masteryProgressByOwner[ownerId] ?? {}
+      ownerProgress[questionId] = (ownerProgress[questionId] ?? 0) + 1
+      this.masteryProgressByOwner[ownerId] = ownerProgress
     },
   },
 })

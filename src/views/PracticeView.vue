@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, Finished, House, RefreshRight, Select } from '@e
 
 import { STATE_EXAM_2026_PDFS_SCOPE_ID, getQuestionScopePreset } from '@/data/questionScopes'
 import { useAuthStore } from '@/stores/auth'
-import { MASTERED_CORRECT_ANSWERS, useExamStore } from '@/stores/exam'
+import { DEFAULT_MASTERED_CORRECT_ANSWERS, useExamStore } from '@/stores/exam'
 import { useThemeStore } from '@/stores/theme'
 import type {
   AnswerFeedbackMode,
@@ -29,6 +29,7 @@ const selectedSectionId = ref<string | 'all'>('all')
 const selectedMode = ref<AnswerFeedbackMode>('immediate')
 const selectedDifficulty = ref<TestDifficulty>('normal')
 const selectedSelectionMode = ref<QuestionSelectionMode>('adaptive')
+const selectedMasteryTarget = ref(DEFAULT_MASTERED_CORRECT_ANSWERS)
 const finishDialogVisible = ref(false)
 const saveFinishedStats = ref(true)
 const finishEarly = ref(false)
@@ -77,6 +78,7 @@ interface AttemptSectionResult {
 }
 
 const ownerId = computed(() => authStore.ownerId)
+const masteryTarget = computed(() => examStore.getMasteryTarget(ownerId.value))
 const activeAttempt = computed(() => examStore.activeAttempt(ownerId.value))
 const currentAttempt = ref<TestAttempt | null>(null)
 const overallSummary = computed(() => examStore.getQuestionPoolSummary(ownerId.value, 'all'))
@@ -319,13 +321,12 @@ const currentQuestionMastery = computed(() => {
     return null
   }
 
-  const questionStat = examStore.getQuestionStats(ownerId.value)[question.id]
-  const correctAnswers = questionStat?.correctAnswers ?? 0
+  const correctAnswers = examStore.getQuestionMasteryCount(ownerId.value, question.id)
 
   return {
     correctAnswers,
-    remainingCorrectAnswers: Math.max(0, MASTERED_CORRECT_ANSWERS - correctAnswers),
-    isMastered: correctAnswers >= MASTERED_CORRECT_ANSWERS,
+    remainingCorrectAnswers: Math.max(0, masteryTarget.value - correctAnswers),
+    isMastered: correctAnswers >= masteryTarget.value,
   }
 })
 
@@ -395,7 +396,7 @@ function getAttemptSelectionLabel(attempt: TestAttempt) {
   }
 
   if (attempt.selectionMode === 'memorize') {
-    return attempt.sectionId === 'all' ? 'Заучивание до 3 верных' : 'Заучивание темы до 3 верных'
+    return attempt.sectionId === 'all' ? `Заучивание до ${masteryTarget.value} верных` : `Заучивание темы до ${masteryTarget.value} верных`
   }
 
   if (attempt.sectionId !== 'all') {
@@ -543,7 +544,7 @@ function getNoQuestionsMessage(questionScopeId?: string) {
     return null
   }
 
-  return `В наборе "${scope.shortTitle}" больше не осталось доступных вопросов: после ${MASTERED_CORRECT_ANSWERS} правильных ответов вопрос считается закрепленным.`
+  return `В наборе "${scope.shortTitle}" больше не осталось доступных вопросов: после ${masteryTarget.value} правильных ответов вопрос считается закрепленным.`
 }
 
 function notifyNoQuestions(sectionId: string | 'all', questionScopeId?: string) {
@@ -556,8 +557,8 @@ function notifyNoQuestions(sectionId: string | 'all', questionScopeId?: string) 
 
   ElMessage.info(
     sectionId === 'all'
-      ? `Нет доступных вопросов: после ${MASTERED_CORRECT_ANSWERS} правильных ответов вопрос считается изученным и больше не попадает в новые попытки.`
-      : `По этой теме не осталось доступных вопросов: после ${MASTERED_CORRECT_ANSWERS} правильных ответов вопрос считается изученным.`,
+      ? `Нет доступных вопросов: после ${masteryTarget.value} правильных ответов вопрос считается изученным и больше не попадает в новые попытки.`
+      : `По этой теме не осталось доступных вопросов: после ${masteryTarget.value} правильных ответов вопрос считается изученным.`,
   )
 }
 
@@ -901,6 +902,11 @@ function startMemorizeAttempt() {
   launchAttempt('all', 'memorize', 'immediate')
 }
 
+function resetMemorizationProgress(sectionId: string | 'all', questionScopeId?: string) {
+  examStore.resetMasteryProgress(ownerId.value, sectionId, questionScopeId)
+  ElMessage.success('Закрепление для выбранного набора сброшено.')
+}
+
 function startStateExamPdfAttempt() {
   if (!stateExamPdfScope) {
     return
@@ -940,6 +946,23 @@ function startMemorizeStateExamPdfAttempt() {
 
   launchAttempt('all', 'memorize', 'immediate', selectedDifficulty.value, stateExamPdfScope.id)
 }
+
+watch(
+  () => masteryTarget.value,
+  (value) => {
+    selectedMasteryTarget.value = value
+  },
+  { immediate: true },
+)
+
+watch(
+  () => selectedMasteryTarget.value,
+  (value) => {
+    if (value !== masteryTarget.value) {
+      examStore.setMasteryTarget(ownerId.value, value)
+    }
+  },
+)
 
 watch(
   () => [route.query.preset, route.query.autostart],
@@ -1169,10 +1192,10 @@ watch(
         <div class="knowledge-hero__content">
           <p class="eyebrow">Карта знаний</p>
           <h2>Сейчас вы знаете программу на {{ overallKnowledge.knowledgePercent }}%</h2>
-          <p class="muted">
-            Процент считается по вопросам, которые уже закреплены:
-            {{ MASTERED_CORRECT_ANSWERS }} правильных ответа переводят вопрос в изученные.
-          </p>
+        <p class="muted">
+          Процент считается по вопросам, которые уже закреплены:
+          {{ masteryTarget }} правильных ответа переводят вопрос в изученные.
+        </p>
         </div>
 
         <div class="knowledge-hero__panel">
@@ -1219,13 +1242,20 @@ watch(
             <el-radio value="hard" border>Сложный</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-form-item label="Закрепление">
+          <el-radio-group v-model="selectedMasteryTarget" class="mode-toggle">
+            <el-radio :value="1" border>1 раз</el-radio>
+            <el-radio :value="2" border>2 раза</el-radio>
+            <el-radio :value="3" border>3 раза</el-radio>
+          </el-radio-group>
+        </el-form-item>
       </div>
 
       <el-alert
         type="info"
         show-icon
         :closable="false"
-        :title="`Обычный режим показывает 4 варианта ответа, сложный — все. После ${MASTERED_CORRECT_ANSWERS} правильных ответов вопрос считается изученным и больше не попадает в новые попытки.`"
+        :title="`Обычный режим показывает 4 варианта ответа, сложный — все. После ${masteryTarget} правильных ответов вопрос считается изученным и больше не попадает в новые попытки.`"
       />
 
       <el-alert
@@ -1275,7 +1305,7 @@ watch(
           <span>Режим заучивания</span>
           <strong>Пока не закрепите все темы</strong>
           <small>
-            Вопросы повторяются случайно, пока каждый не получит {{ MASTERED_CORRECT_ANSWERS }} верных ответа.
+            Вопросы повторяются случайно, пока каждый не получит {{ masteryTarget }} верных ответа.
             Сейчас осталось: {{ memorizeQuestionCount }}
           </small>
           <div class="knowledge-meter">
@@ -1303,6 +1333,9 @@ watch(
             @click="startMemorizeAttempt"
           >
             Заучивать все темы: {{ memorizeQuestionCount }} вопросов
+          </el-button>
+          <el-button plain @click="resetMemorizationProgress('all')">
+            Сбросить закрепление
           </el-button>
         </el-card>
 
@@ -1407,6 +1440,9 @@ watch(
             >
               Заучивать циклом: {{ stateExamPdfMemorizeQuestionCount }}
             </el-button>
+            <el-button plain @click="resetMemorizationProgress('all', stateExamPdfScope.id)">
+              Сбросить закрепление PDF
+            </el-button>
           </div>
         </el-card>
       </div>
@@ -1474,7 +1510,10 @@ watch(
               :disabled="knowledge.availableQuestions === 0"
               @click="startMemorizeSectionAttempt(section.id)"
             >
-              Заучивать до 3 верных: {{ knowledge.availableQuestions }}
+              Заучивать до {{ masteryTarget }} верных: {{ knowledge.availableQuestions }}
+            </el-button>
+            <el-button plain @click="resetMemorizationProgress(section.id)">
+              Сбросить закрепление
             </el-button>
           </div>
         </el-card>
@@ -1499,7 +1538,7 @@ watch(
             <span v-if="currentAttemptScope" class="attempt-meta">{{ currentAttemptScope.shortTitle }}</span>
             <span class="attempt-meta">{{ getAttemptSelectionLabel(workingAttempt) }}</span>
             <span v-if="workingAttempt.selectionMode === 'memorize' && currentQuestionMastery" class="attempt-meta">
-              {{ currentQuestionMastery.isMastered ? 'Уже закреплен' : `До закрепления: ${currentQuestionMastery.correctAnswers}/${MASTERED_CORRECT_ANSWERS}` }}
+              {{ currentQuestionMastery.isMastered ? 'Уже закреплен' : `До закрепления: ${currentQuestionMastery.correctAnswers}/${masteryTarget}` }}
             </span>
           </div>
         </div>

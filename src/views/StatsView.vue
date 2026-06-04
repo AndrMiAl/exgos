@@ -10,7 +10,7 @@ import VChart from 'vue-echarts'
 
 import { getQuestionScopePreset } from '@/data/questionScopes'
 import { useAuthStore } from '@/stores/auth'
-import { MASTERED_CORRECT_ANSWERS, useExamStore } from '@/stores/exam'
+import { useExamStore } from '@/stores/exam'
 import { useThemeStore } from '@/stores/theme'
 import type {
   AnswerFeedbackMode,
@@ -30,6 +30,7 @@ const themeStore = useThemeStore()
 const activeTopSections = ref<string[]>(['attempts', 'charts'])
 const activeSections = ref<string[]>([])
 const ownerQuestionStats = computed(() => examStore.getQuestionStats(authStore.ownerId))
+const masteryTarget = computed(() => examStore.getMasteryTarget(authStore.ownerId))
 
 const statusLabels: Record<AttemptStatus, string> = {
   active: 'В процессе',
@@ -52,7 +53,7 @@ const difficultyLabels: Record<TestDifficulty, string> = {
 const selectionModeLabels: Record<QuestionSelectionMode, string> = {
   adaptive: 'Смешанный режим',
   balanced: 'Режим ГЭК',
-  memorize: 'Заучивание до 3 верных',
+  memorize: 'Заучивание с закреплением',
   mistakes: 'Повтор ошибок',
 }
 
@@ -61,9 +62,10 @@ const sectionStats = computed(() =>
   examStore.sections.map((section) => {
     const questionRows = section.questions.map((question) => {
       const stat = ownerQuestionStats.value[question.id]
+      const masteryCount = examStore.getQuestionMasteryCount(authStore.ownerId, question.id)
       const totalAnswers = stat?.totalAnswers ?? 0
       const correctAnswers = stat?.correctAnswers ?? 0
-      const mastered = correctAnswers >= MASTERED_CORRECT_ANSWERS
+      const mastered = masteryCount >= masteryTarget.value
 
       return {
         questionId: question.id,
@@ -71,10 +73,11 @@ const sectionStats = computed(() =>
         questionText: question.text,
         totalAnswers,
         correctAnswers,
+        masteryCount,
         accuracy: getAccuracyPercent(correctAnswers, totalAnswers),
         lastAnsweredAt: stat?.lastAnsweredAt ?? '',
         mastered,
-        answersToMastery: Math.max(0, MASTERED_CORRECT_ANSWERS - correctAnswers),
+        answersToMastery: Math.max(0, masteryTarget.value - masteryCount),
         statusLabel: mastered ? 'Изучен' : totalAnswers > 0 ? 'В работе' : 'Новый',
         statusType: mastered ? 'success' : totalAnswers > 0 ? 'warning' : 'info',
       }

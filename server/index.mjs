@@ -102,6 +102,8 @@ function emptyProgress() {
   return {
     attempts: [],
     questionStats: {},
+    masteryProgress: {},
+    masteryTarget: 3,
   }
 }
 
@@ -269,6 +271,8 @@ apiRouter.get('/progress', authRequired, (req, res) => {
 apiRouter.put('/progress', authRequired, (req, res) => {
   const attempts = Array.isArray(req.body?.attempts) ? req.body.attempts : []
   const questionStats = req.body?.questionStats && typeof req.body.questionStats === 'object' ? req.body.questionStats : {}
+  const masteryProgress = req.body?.masteryProgress && typeof req.body.masteryProgress === 'object' ? req.body.masteryProgress : {}
+  const masteryTarget = Number(req.body?.masteryTarget ?? 3)
 
   req.db.progressByUser[req.user.id] = {
     attempts: attempts.map((attempt) => ({
@@ -276,6 +280,8 @@ apiRouter.put('/progress', authRequired, (req, res) => {
       ownerId: req.user.id,
     })),
     questionStats,
+    masteryProgress,
+    masteryTarget: Number.isNaN(masteryTarget) ? 3 : Math.min(3, Math.max(1, Math.round(masteryTarget))),
   }
   writeDb(req.db)
   res.json({ ok: true })

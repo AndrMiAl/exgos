@@ -103,3 +103,10 @@ export interface QuestionStatBreakdown {
   optionHits: Record<string, number>
   lastAnsweredAt?: string
 }
+
+export interface MasteryProgressState {
+  attempts: TestAttempt[]
+  questionStats: Record<string, QuestionStat>
+  masteryProgress?: Record<string, number>
+  masteryTarget?: number
+}
