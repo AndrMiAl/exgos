@@ -1265,6 +1265,38 @@ watch(
         title="Все вопросы уже изучены. Очистите статистику, если захотите пройти их заново."
       />
 
+      <div v-if="activeAttempt" class="resume-panel">
+        <div class="section-block__header section-block__header--compact">
+          <div>
+            <p class="eyebrow">РџСЂРѕРґРѕР»Р¶РµРЅРёРµ</p>
+            <h3>РќРµР·Р°РІРµСЂС€РµРЅРЅР°СЏ РїРѕРїС‹С‚РєР°</h3>
+          </div>
+          <el-button size="large" type="primary" @click="resumeAttempt">РџСЂРѕРґРѕР»Р¶РёС‚СЊ РїРѕРїС‹С‚РєСѓ</el-button>
+        </div>
+        <el-alert
+          type="info"
+          show-icon
+          :closable="false"
+          class="resume-attempt-alert"
+        >
+          <template #title>РњРѕР¶РЅРѕ РІРµСЂРЅСѓС‚СЊСЃСЏ Р±РµР· РїРѕС‚РµСЂРё РїСЂРѕРіСЂРµСЃСЃР°</template>
+          <template #default>
+            РЎРЅР°С‡Р°Р»Р° РјРѕР¶РЅРѕ РїРѕСЃРјРѕС‚СЂРµС‚СЊ РѕР±Р·РѕСЂ С‚РµРј Рё РІС‹Р±СЂР°С‚СЊ СЂРµР¶РёРј, Р° РїРѕС‚РѕРј РІ Р»СЋР±РѕР№ РјРѕРјРµРЅС‚ РїСЂРѕРґРѕР»Р¶РёС‚СЊ СЌС‚Сѓ РїРѕРїС‹С‚РєСѓ СЃ С‚РѕРіРѕ Р¶Рµ РјРµСЃС‚Р°.
+          </template>
+        </el-alert>
+      </div>
+
+      <section class="section-block">
+        <div class="section-block__header">
+          <div>
+            <p class="eyebrow">РћСЃРЅРѕРІРЅРѕРµ</p>
+            <h3>РћР±С‰РёРµ СЂРµР¶РёРјС‹ РїРѕРґРіРѕС‚РѕРІРєРё</h3>
+          </div>
+          <p class="muted section-block__hint">
+            Р—РґРµСЃСЊ Р±С‹СЃС‚СЂС‹Р№ СЃС‚Р°СЂС‚: РѕР±С‹С‡РЅС‹Р№ РїСЂРѕС…РѕРґ, Р·Р°СѓС‡РёРІР°РЅРёРµ Рё РёС‚РѕРіРѕРІС‹Р№ Р“Р­Рљ.
+          </p>
+        </div>
+
       <div class="section-picker">
         <el-card shadow="never" class="section-option section-option--overall">
           <span>Смешанный режим</span>
@@ -1374,7 +1406,20 @@ watch(
         </el-card>
       </div>
 
-      <div v-if="stateExamPdfScope" class="section-picker">
+      </section>
+
+      <section v-if="stateExamPdfScope" class="section-block">
+        <div class="section-block__header">
+          <div>
+            <p class="eyebrow">РСЃС‚РѕС‡РЅРёРєРё</p>
+            <h3>{{ stateExamPdfScope.shortTitle }}</h3>
+          </div>
+          <p class="muted section-block__hint">
+            Р­С‚Рѕ РѕС‚РґРµР»СЊРЅС‹Р№ РЅР°Р±РѕСЂ С‚РѕР»СЊРєРѕ РёР· РґРІСѓС… PDF, РЅРѕ РµРіРѕ Р·Р°РєСЂРµРїР»РµРЅРёРµ РІСЃРµ СЂР°РІРЅРѕ РёРґРµС‚ РІ РѕР±С‰СѓСЋ СЃС‚Р°С‚РёСЃС‚РёРєСѓ.
+          </p>
+        </div>
+
+      <div class="section-picker">
         <el-card
           shadow="never"
           class="section-option section-option--materials"
@@ -1446,7 +1491,20 @@ watch(
         </el-card>
       </div>
 
-      <div v-if="activeAttempt" class="button-row">
+      </section>
+
+      <section class="section-block">
+        <div class="section-block__header">
+          <div>
+            <p class="eyebrow">Р Р°Р·РґРµР»С‹</p>
+            <h3>РўРѕС‡РµС‡РЅР°СЏ С‚СЂРµРЅРёСЂРѕРІРєР° РїРѕ С‚РµРјР°Рј</h3>
+          </div>
+          <p class="muted section-block__hint">
+            Р—Р°РїСѓСЃРєР°Р№С‚Рµ РѕС‚РґРµР»СЊРЅС‹Р№ СЂР°Р·РґРµР» РёР»Рё СЃСЂР°Р·Сѓ РІРєР»СЋС‡Р°Р№С‚Рµ РїРѕРІС‚РѕСЂРµРЅРёРµ РґРѕ Р·Р°РєСЂРµРїР»РµРЅРёСЏ.
+          </p>
+        </div>
+
+      <div v-if="false && activeAttempt" class="button-row">
         <el-alert
           type="info"
           show-icon
@@ -1517,6 +1575,7 @@ watch(
           </div>
         </el-card>
       </div>
+      </section>
     </el-card>
 
     <el-empty
@@ -1946,6 +2005,46 @@ watch(
   border: 1px solid var(--practice-border);
   background: var(--practice-card-shell);
   box-shadow: 0 28px 60px var(--practice-shadow);
+}
+
+.resume-panel {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0 22px;
+  padding: 18px 20px;
+  border: 1px solid var(--practice-border);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.1) 0%, var(--practice-panel-bg) 100%);
+}
+
+.section-block {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.section-block__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section-block__header--compact {
+  align-items: center;
+}
+
+.section-block__header h3 {
+  margin: 6px 0 0;
+  color: var(--practice-text-strong);
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.section-block__hint {
+  max-width: 560px;
+  margin: 0;
+  text-align: right;
 }
 
 .knowledge-hero {
@@ -2882,6 +2981,21 @@ watch(
 }
 
 @media (max-width: 860px) {
+  .section-block__header,
+  .section-block__header--compact {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .section-block__hint {
+    max-width: none;
+    text-align: left;
+  }
+
+  .resume-panel {
+    padding: 16px;
+  }
+
   .practice-page--attempting {
     gap: 12px;
   }
