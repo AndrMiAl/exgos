@@ -1349,14 +1349,14 @@ watch(
             <h3>Общие режимы подготовки</h3>
           </div>
           <p class="muted section-block__hint">
-            Здесь быстрый старт: обычный проход, заучивание и итоговый ГЭК.
+            Выберите, как проходить общий банк: обычный режим, антизапоминание, заучивание или финальный ГЭК.
           </p>
         </div>
 
-      <div class="section-picker">
+      <div class="section-picker section-picker--modes">
         <el-card shadow="never" class="section-option section-option--overall">
           <span>Смешанный режим</span>
-          <strong>Все темы</strong>
+          <strong>Обычный проход</strong>
           <small>
             Доступно: {{ overallSummary.availableQuestions }} из {{ overallSummary.totalQuestions }}
             · Изучено: {{ overallSummary.masteredQuestions }}
@@ -1384,13 +1384,13 @@ watch(
             :disabled="adaptiveQuestionCount === 0"
             @click="startAdaptiveAttempt"
           >
-            Решать все темы: {{ adaptiveQuestionCount }} вопросов
+            Начать обычный режим · {{ adaptiveQuestionCount }}
           </el-button>
         </el-card>
 
         <el-card shadow="never" class="section-option section-option--overall section-option--anti">
           <span>Антизапоминание</span>
-          <strong>Думать, а не тыкать</strong>
+          <strong>Похожие ловушки</strong>
           <small>
             Варианты ответов похожи по смыслу, но формулируются чуть иначе.
             Ловушки, на которых вы уже ошибались, возвращаются чаще.
@@ -1419,13 +1419,13 @@ watch(
             :disabled="antiMemoryQuestionCount === 0"
             @click="startAntiMemoryAttempt"
           >
-            Запустить антизапоминание: {{ antiMemoryQuestionCount }} вопросов
+            Антизапоминание · {{ antiMemoryQuestionCount }}
           </el-button>
         </el-card>
 
-        <el-card shadow="never" class="section-option section-option--overall">
+        <el-card shadow="never" class="section-option section-option--overall section-option--memorize">
           <span>Режим заучивания</span>
-          <strong>Пока не закрепите все темы</strong>
+          <strong>До полного закрепления</strong>
           <small>
             Вопросы повторяются случайно, пока каждый не получит {{ masteryTarget }} верных ответа.
             Сейчас осталось: {{ memorizeQuestionCount }}
@@ -1454,7 +1454,7 @@ watch(
             :disabled="memorizeQuestionCount === 0"
             @click="startMemorizeAttempt"
           >
-            Заучивать все темы: {{ memorizeQuestionCount }} вопросов
+            До закрепления · {{ memorizeQuestionCount }}
           </el-button>
           <el-button plain @click="resetMemorizationProgress('all')">
             Сбросить закрепление
@@ -1463,7 +1463,7 @@ watch(
 
         <el-card shadow="never" class="section-option section-option--gek">
           <span>Режим ГЭК</span>
-          <strong>Равномерно по всем темам</strong>
+          <strong>Финальная проверка</strong>
           <small>
             Поровну по темам, максимум {{ Math.min(50, overallSummary.totalQuestions) }} вопросов
             · Сейчас доступно: {{ balancedQuestionCount }}
@@ -1492,7 +1492,7 @@ watch(
             :disabled="balancedQuestionCount === 0"
             @click="startBalancedAttempt"
           >
-            Запустить ГЭК: {{ balancedQuestionCount }} вопросов
+            Запустить ГЭК · {{ balancedQuestionCount }}
           </el-button>
         </el-card>
       </div>
@@ -1506,11 +1506,11 @@ watch(
             <h3>{{ stateExamPdfScope.shortTitle }}</h3>
           </div>
           <p class="muted section-block__hint">
-            Это отдельный набор только из двух PDF, но его закрепление все равно идет в общую статистику.
+            Отдельный набор только из двух PDF: можно пройти вариант, полный прогон, заучивание или антизапоминание.
           </p>
         </div>
 
-      <div class="section-picker">
+      <div class="section-picker section-picker--source">
         <el-card
           shadow="never"
           class="section-option section-option--materials"
@@ -1539,7 +1539,7 @@ watch(
               <span>{{ stateExamPdfKnowledge.masteredQuestions }} из {{ stateExamPdfKnowledge.totalQuestions }} уже закреплено</span>
             </div>
           </div>
-          <div class="section-option__actions">
+          <div class="section-option__actions section-option__actions--matrix">
             <el-button
               type="success"
               plain
@@ -1547,7 +1547,7 @@ watch(
               :disabled="stateExamPdfVariantQuestionCount === 0"
               @click="startBalancedStateExamPdfAttempt"
             >
-              Вариант 48: {{ stateExamPdfVariantQuestionCount }} вопросов
+              Вариант 48 · {{ stateExamPdfVariantQuestionCount }}
             </el-button>
             <el-button
               type="primary"
@@ -1556,7 +1556,7 @@ watch(
               :disabled="stateExamPdfAdaptiveQuestionCount === 0"
               @click="startStateExamPdfAttempt"
             >
-              Случайные: {{ stateExamPdfAdaptiveQuestionCount }} вопросов
+              Случайные 50 · {{ stateExamPdfAdaptiveQuestionCount }}
             </el-button>
             <el-button
               plain
@@ -1564,7 +1564,7 @@ watch(
               :disabled="stateExamPdfFullQuestionCount === 0"
               @click="startFullStateExamPdfAttempt"
             >
-              Все вопросы: {{ stateExamPdfFullQuestionCount }}
+              Все вопросы · {{ stateExamPdfFullQuestionCount }}
             </el-button>
             <el-button
               type="warning"
@@ -1573,7 +1573,7 @@ watch(
               :disabled="stateExamPdfMemorizeQuestionCount === 0"
               @click="startMemorizeStateExamPdfAttempt"
             >
-              Заучивать циклом: {{ stateExamPdfMemorizeQuestionCount }}
+              До закрепления · {{ stateExamPdfMemorizeQuestionCount }}
             </el-button>
             <el-button
               type="danger"
@@ -1582,9 +1582,9 @@ watch(
               :disabled="stateExamPdfAntiMemoryQuestionCount === 0"
               @click="startAntiMemoryStateExamPdfAttempt"
             >
-              Антизапоминание: {{ stateExamPdfAntiMemoryQuestionCount }}
+              Антизапоминание · {{ stateExamPdfAntiMemoryQuestionCount }}
             </el-button>
-            <el-button plain @click="resetMemorizationProgress('all', stateExamPdfScope.id)">
+            <el-button plain class="section-option__action--wide" @click="resetMemorizationProgress('all', stateExamPdfScope.id)">
               Сбросить закрепление PDF
             </el-button>
           </div>
@@ -1600,11 +1600,11 @@ watch(
             <h3>Точечная тренировка по темам</h3>
           </div>
           <p class="muted section-block__hint">
-            Запускайте отдельный раздел или сразу включайте повторение до закрепления.
+            Для каждой темы можно запустить обычный режим, заучивание или антизапоминание.
           </p>
         </div>
 
-      <div class="section-picker">
+      <div class="section-picker section-picker--topics">
         <el-card
           v-for="{ section, shortTitle, knowledge } in sectionSummaries"
           :key="section.id"
@@ -2141,6 +2141,23 @@ watch(
   text-align: right;
 }
 
+.section-picker {
+  display: grid;
+  gap: 18px;
+}
+
+.section-picker--modes {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.section-picker--source {
+  grid-template-columns: 1fr;
+}
+
+.section-picker--topics {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
 .knowledge-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
@@ -2232,21 +2249,80 @@ watch(
   overflow: hidden;
   border-radius: 22px;
   box-shadow: 0 18px 38px var(--practice-shadow);
+  min-width: 0;
 }
 
 .section-option :deep(.el-card__body) {
   display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
   gap: 12px;
   padding: 20px;
+  height: 100%;
+}
+
+.section-option > span,
+.section-option :deep(.el-card__body > span) {
+  color: var(--practice-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.section-option > strong,
+.section-option :deep(.el-card__body > strong) {
+  color: var(--practice-text-strong);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.section-option > small,
+.section-option :deep(.el-card__body > small) {
+  color: var(--practice-muted);
+  font-size: 15px;
+  line-height: 1.55;
 }
 
 .section-option__actions {
   display: grid;
   gap: 10px;
+  margin-top: auto;
+}
+
+.section-option__actions--matrix {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.section-option__actions :deep(.el-button) {
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  padding: 12px 14px;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.section-option__actions--matrix :deep(.el-button) {
+  justify-content: center;
+  text-align: center;
+}
+
+.section-option__action--wide {
+  grid-column: 1 / -1;
 }
 
 .section-option--overall {
   background: linear-gradient(160deg, rgba(37, 99, 235, 0.16) 0%, var(--practice-panel-bg) 70%);
+}
+
+.section-option--memorize {
+  background: linear-gradient(160deg, rgba(245, 158, 11, 0.14) 0%, var(--practice-panel-bg) 70%);
+}
+
+.section-option--anti {
+  background: linear-gradient(160deg, rgba(239, 68, 68, 0.14) 0%, var(--practice-panel-bg) 70%);
 }
 
 .section-option--gek {
@@ -3159,6 +3235,12 @@ watch(
   .knowledge-hero__content,
   .knowledge-hero__panel {
     padding: 18px;
+  }
+
+  .section-picker--modes,
+  .section-picker--topics,
+  .section-option__actions--matrix {
+    grid-template-columns: 1fr;
   }
 
   .knowledge-hero__content h2 {
