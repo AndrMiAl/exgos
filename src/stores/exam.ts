@@ -182,8 +182,14 @@ function getUniqueOptionsForDisplay(question: ExamQuestion) {
   return uniqueOptions
 }
 
-function getOptionIdsForDifficulty(question: ExamQuestion, difficulty: TestDifficulty) {
+function getOptionIdsForDifficulty(
+  question: ExamQuestion,
+  difficulty: TestDifficulty,
+  questionStat?: QuestionStat,
+  selectionMode: QuestionSelectionMode = 'adaptive',
+) {
   const uniqueOptions = getUniqueOptionsForDisplay(question)
+  const preferredDistractorCount = selectionMode === 'anti_memory' ? 4 : 3
 
   if (difficulty === 'hard' || uniqueOptions.length <= 4) {
     return shuffleQuestions(uniqueOptions).map((option) => option.id)
@@ -196,7 +202,34 @@ function getOptionIdsForDifficulty(question: ExamQuestion, difficulty: TestDiffi
     return shuffleQuestions(uniqueOptions).slice(0, 4).map((option) => option.id)
   }
 
-  return shuffleQuestions([correctOption, ...sampleQuestions(distractors, 3)]).map((option) => option.id)
+  const prioritizedDistractors = [...distractors]
+    .map((option) => ({
+      option,
+      wrongHitCount: questionStat?.optionHits?.[option.id] ?? 0,
+    }))
+    .sort((left, right) => {
+      if (right.wrongHitCount !== left.wrongHitCount) {
+        return right.wrongHitCount - left.wrongHitCount
+      }
+
+      return stableOptionOrder(left.option.id, right.option.id)
+    })
+
+  const stickyDistractors = prioritizedDistractors
+    .filter((entry) => entry.wrongHitCount > 0)
+    .map((entry) => entry.option)
+  const freshDistractors = shuffleQuestions(
+    prioritizedDistractors
+      .filter((entry) => entry.wrongHitCount === 0)
+      .map((entry) => entry.option),
+  )
+  const selectedDistractors = [...stickyDistractors, ...freshDistractors].slice(0, preferredDistractorCount)
+
+  return shuffleQuestions([correctOption, ...selectedDistractors]).map((option) => option.id)
+}
+
+function stableOptionOrder(leftId: string, rightId: string) {
+  return leftId.localeCompare(rightId)
 }
 
 interface ExamProgressState {
@@ -359,6 +392,7 @@ export const useExamStore = defineStore('exam', {
     appendQuestionToAttempt(attempt: TestAttempt, question: ExamQuestion) {
       const isMemorizationMode = attempt.selectionMode === 'memorize'
       const questionEntryId = isMemorizationMode ? createAttemptQuestionEntry(question).entryId : question.id
+      const questionStat = this.getQuestionStats(attempt.ownerId)[question.id]
 
       if (isMemorizationMode) {
         attempt.questionRefsByEntryId = {
@@ -370,7 +404,12 @@ export const useExamStore = defineStore('exam', {
       attempt.questionIds.push(questionEntryId)
       attempt.optionOrderByQuestionId = {
         ...(attempt.optionOrderByQuestionId ?? {}),
-        [questionEntryId]: getOptionIdsForDifficulty(question, attempt.difficulty ?? 'hard'),
+        [questionEntryId]: getOptionIdsForDifficulty(
+          question,
+          attempt.difficulty ?? 'hard',
+          questionStat,
+          attempt.selectionMode ?? 'adaptive',
+        ),
       }
 
       return questionEntryId

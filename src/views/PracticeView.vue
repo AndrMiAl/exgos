@@ -17,7 +17,7 @@ import type {
 } from '@/types/domain'
 import { buildConceptExplanation } from '@/utils/conceptGuides'
 import { getAccuracyPercent, getExamGrade } from '@/utils/grading'
-import { getOptionDisplayText, getOptionSemanticKey } from '@/utils/questionOptions'
+import { getOptionDisplayText, getOptionSemanticKey, getOptionVariantText } from '@/utils/questionOptions'
 
 const authStore = useAuthStore()
 const examStore = useExamStore()
@@ -83,6 +83,7 @@ const activeAttempt = computed(() => examStore.activeAttempt(ownerId.value))
 const currentAttempt = ref<TestAttempt | null>(null)
 const overallSummary = computed(() => examStore.getQuestionPoolSummary(ownerId.value, 'all'))
 const adaptiveQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'adaptive'))
+const antiMemoryQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'anti_memory'))
 const balancedQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'balanced'))
 const memorizeQuestionCount = computed(() => examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'memorize'))
 const stateExamPdfSummary = computed(() =>
@@ -95,6 +96,9 @@ const stateExamPdfVariantQuestionCount = computed(() =>
 )
 const stateExamPdfAdaptiveQuestionCount = computed(() =>
   stateExamPdfScope ? examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'adaptive', stateExamPdfScope.id) : 0,
+)
+const stateExamPdfAntiMemoryQuestionCount = computed(() =>
+  stateExamPdfScope ? examStore.getGeneratedQuestionCount(ownerId.value, 'all', 'anti_memory', stateExamPdfScope.id) : 0,
 )
 const stateExamPdfFullQuestionCount = computed(() => stateExamPdfSummary.value.availableQuestions)
 const stateExamPdfMemorizeQuestionCount = computed(() =>
@@ -338,17 +342,22 @@ function getOrderedOptions(question: ExamQuestion, attempt: TestAttempt, questio
   const optionsById = new Map(question.options.map((option) => [option.id, option]))
   const candidateOrder = [...optionOrder, ...question.options.map((option) => option.id).filter((optionId) => !optionOrder.includes(optionId))]
   const desiredCount = optionOrder.length
-  const optionBySemanticKey = new Map<string, { option: ExamQuestion['options'][number] & { displayText: string }; index: number }>()
-  const deduplicatedOptions: Array<ExamQuestion['options'][number] & { displayText: string }> = []
+  const variantIntensity = attempt.selectionMode === 'anti_memory' ? 'strong' : 'normal'
+  const optionBySemanticKey = new Map<
+    string,
+    { option: ExamQuestion['options'][number] & { displayText: string; semanticText: string }; index: number }
+  >()
+  const deduplicatedOptions: Array<ExamQuestion['options'][number] & { displayText: string; semanticText: string }> = []
 
   for (const option of candidateOrder
     .map((optionId) => optionsById.get(optionId))
     .filter((option) => option !== undefined)
     .map((option) => ({
       ...option,
-      displayText: getOptionDisplayText(option.text),
+      semanticText: getOptionDisplayText(option.text),
+      displayText: getOptionVariantText(option.text, `${attempt.id}:${questionEntryId}:${option.id}`, variantIntensity),
     }))) {
-    const semanticKey = getOptionSemanticKey(option.displayText)
+    const semanticKey = getOptionSemanticKey(option.semanticText)
     const existing = optionBySemanticKey.get(semanticKey)
 
     if (!existing) {
@@ -377,6 +386,10 @@ function getOrderedOptions(question: ExamQuestion, attempt: TestAttempt, questio
 function getAttemptSelectionLabel(attempt: TestAttempt) {
   if (attempt.selectionMode === 'mistakes') {
     return 'Повтор ошибок'
+  }
+
+  if (attempt.selectionMode === 'anti_memory') {
+    return attempt.questionScopeId ? 'Антизапоминание по двум PDF' : 'Антизапоминание'
   }
 
   if (attempt.questionScopeId) {
@@ -894,6 +907,10 @@ function startAdaptiveAttempt() {
   launchAttempt('all', 'adaptive')
 }
 
+function startAntiMemoryAttempt() {
+  launchAttempt('all', 'anti_memory')
+}
+
 function startBalancedAttempt() {
   launchAttempt('all', 'balanced')
 }
@@ -913,6 +930,14 @@ function startStateExamPdfAttempt() {
   }
 
   launchAttempt('all', 'adaptive', selectedMode.value, selectedDifficulty.value, stateExamPdfScope.id)
+}
+
+function startAntiMemoryStateExamPdfAttempt() {
+  if (!stateExamPdfScope) {
+    return
+  }
+
+  launchAttempt('all', 'anti_memory', selectedMode.value, selectedDifficulty.value, stateExamPdfScope.id)
 }
 
 function startBalancedStateExamPdfAttempt() {
@@ -973,6 +998,8 @@ watch(
 
     if (autostart === 'variant48') {
       startBalancedStateExamPdfAttempt()
+    } else if (autostart === 'anti') {
+      startAntiMemoryStateExamPdfAttempt()
     } else if (autostart === 'single') {
       startStateExamPdfAttempt()
     } else if (autostart === 'full') {
@@ -1015,6 +1042,8 @@ watch(
 
     if (mode === 'adaptive') {
       startSectionAttempt(sectionId)
+    } else if (mode === 'anti') {
+      startAntiMemorySectionAttempt(sectionId)
     } else if (mode === 'memorize') {
       startMemorizeSectionAttempt(sectionId)
     } else {
@@ -1031,6 +1060,10 @@ watch(
 
 function startSectionAttempt(sectionId: string) {
   launchAttempt(sectionId, 'adaptive')
+}
+
+function startAntiMemorySectionAttempt(sectionId: string) {
+  launchAttempt(sectionId, 'anti_memory')
 }
 
 function startMemorizeSectionAttempt(sectionId: string) {
@@ -1355,6 +1388,41 @@ watch(
           </el-button>
         </el-card>
 
+        <el-card shadow="never" class="section-option section-option--overall section-option--anti">
+          <span>Антизапоминание</span>
+          <strong>Думать, а не тыкать</strong>
+          <small>
+            Варианты ответов похожи по смыслу, но формулируются чуть иначе.
+            Ловушки, на которых вы уже ошибались, возвращаются чаще.
+          </small>
+          <div class="knowledge-meter">
+            <div class="knowledge-meter__header">
+              <span>Меньше запоминания кнопок</span>
+              <strong :style="{ color: overallKnowledge.knowledgeColor }">{{ overallKnowledge.knowledgePercent }}%</strong>
+            </div>
+            <el-progress
+              :percentage="overallKnowledge.knowledgePercent"
+              :show-text="false"
+              :stroke-width="10"
+              :color="overallKnowledge.knowledgeColor"
+              class="knowledge-progress"
+            />
+            <div class="knowledge-meter__footer">
+              <span>Подходит после того, как вы уже освоили основной банк</span>
+              <span>{{ antiMemoryQuestionCount }} вопросов готовы к прогону</span>
+            </div>
+          </div>
+          <el-button
+            type="danger"
+            plain
+            :icon="Select"
+            :disabled="antiMemoryQuestionCount === 0"
+            @click="startAntiMemoryAttempt"
+          >
+            Запустить антизапоминание: {{ antiMemoryQuestionCount }} вопросов
+          </el-button>
+        </el-card>
+
         <el-card shadow="never" class="section-option section-option--overall">
           <span>Режим заучивания</span>
           <strong>Пока не закрепите все темы</strong>
@@ -1507,6 +1575,15 @@ watch(
             >
               Заучивать циклом: {{ stateExamPdfMemorizeQuestionCount }}
             </el-button>
+            <el-button
+              type="danger"
+              plain
+              :icon="Select"
+              :disabled="stateExamPdfAntiMemoryQuestionCount === 0"
+              @click="startAntiMemoryStateExamPdfAttempt"
+            >
+              Антизапоминание: {{ stateExamPdfAntiMemoryQuestionCount }}
+            </el-button>
             <el-button plain @click="resetMemorizationProgress('all', stateExamPdfScope.id)">
               Сбросить закрепление PDF
             </el-button>
@@ -1576,6 +1653,15 @@ watch(
               @click="startMemorizeSectionAttempt(section.id)"
             >
               Заучивать до {{ masteryTarget }} верных: {{ knowledge.availableQuestions }}
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              :icon="Select"
+              :disabled="knowledge.availableQuestions === 0"
+              @click="startAntiMemorySectionAttempt(section.id)"
+            >
+              Антизапоминание: {{ knowledge.availableQuestions }}
             </el-button>
             <el-button plain @click="resetMemorizationProgress(section.id)">
               Сбросить закрепление

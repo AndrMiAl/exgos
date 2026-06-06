@@ -23,6 +23,7 @@ interface DashboardMetric {
   value: string
   note: string
   icon: typeof Collection
+  tone: 'neutral' | 'accent' | 'success' | 'warm'
 }
 
 interface ActiveAttemptSnapshot {
@@ -32,6 +33,7 @@ interface ActiveAttemptSnapshot {
   progressLabel: string
   answered: number
   total: number
+  progressPercent: number
 }
 
 interface TodaySnapshot {
@@ -255,6 +257,8 @@ const heroAttempt = computed<ActiveAttemptSnapshot | null>(() => {
     progressLabel: `Вопрос ${Math.min(attempt.currentIndex + 1, attempt.questionIds.length || 1)} из ${attempt.questionIds.length || 1}`,
     answered: attempt.answers.length,
     total: attempt.questionIds.length,
+    progressPercent:
+      attempt.questionIds.length > 0 ? Math.round((attempt.answers.length / attempt.questionIds.length) * 100) : 0,
   }
 })
 
@@ -264,24 +268,28 @@ const metrics = computed<DashboardMetric[]>(() => [
     value: totalQuestions.value.toString(),
     note: 'Полный банк тренажера',
     icon: Collection,
+    tone: 'neutral',
   },
   {
     label: 'Завершено попыток',
     value: attempts.value.length.toString(),
     note: 'Сохраненная история прохождений',
     icon: CircleCheck,
+    tone: 'success',
   },
   {
     label: 'Точность ответов',
     value: `${accuracy.value}%`,
     note: totalAnswers.value > 0 ? `${correctAnswers.value} из ${totalAnswers.value} ответов верно` : 'Пока нет ответов',
     icon: TrendCharts,
+    tone: 'accent',
   },
   {
     label: 'Общая оценка',
     value: grade.value.label,
     note: 'Считается по общей точности',
     icon: Medal,
+    tone: 'warm',
   },
 ])
 
@@ -417,124 +425,145 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <section class="dashboard-hero">
-      <article v-if="heroAttempt" class="feature-card feature-card--active">
-        <div class="feature-card__head">
-          <span class="feature-card__eyebrow">Сейчас в работе</span>
-          <div class="feature-card__pills">
-            <span class="feature-pill feature-pill--accent">{{ heroAttempt.subtitle }}</span>
-            <span class="feature-pill">{{ heroAttempt.progressLabel }}</span>
-          </div>
-        </div>
-
-        <div class="feature-card__body">
-          <div>
-            <h2>{{ heroAttempt.title }}</h2>
-            <p>Текущая попытка уже сохранена. Можно продолжить с того же места или быстро сбросить и начать заново.</p>
-          </div>
-
-          <div class="feature-card__stats">
-            <div class="feature-stat">
-              <span>Отвечено</span>
-              <strong>{{ heroAttempt.answered }}</strong>
+    <section class="dashboard-priority">
+      <div class="dashboard-priority__main">
+        <section class="dashboard-hero">
+          <article v-if="heroAttempt" class="feature-card feature-card--active">
+            <div class="feature-card__head">
+              <span class="feature-card__eyebrow">Сейчас в работе</span>
+              <div class="feature-card__pills">
+                <span class="feature-pill feature-pill--accent">{{ heroAttempt.subtitle }}</span>
+                <span class="feature-pill">{{ heroAttempt.progressLabel }}</span>
+              </div>
             </div>
-            <div class="feature-stat">
-              <span>Всего в попытке</span>
-              <strong>{{ heroAttempt.total }}</strong>
+
+            <div class="feature-card__body">
+              <div>
+                <h2>{{ heroAttempt.title }}</h2>
+                <p>Текущая попытка уже сохранена. Можно продолжить с того же места или быстро сбросить и начать заново.</p>
+              </div>
+
+              <div class="feature-card__stats">
+                <div class="feature-stat">
+                  <span>Отвечено</span>
+                  <strong>{{ heroAttempt.answered }}</strong>
+                </div>
+                <div class="feature-stat">
+                  <span>Всего в попытке</span>
+                  <strong>{{ heroAttempt.total }}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="hero-progress">
+              <div class="hero-progress__head">
+                <span>Продвижение по попытке</span>
+                <strong>{{ heroAttempt.progressPercent }}%</strong>
+              </div>
+              <div class="hero-progress__track">
+                <div class="hero-progress__bar" :style="{ width: `${heroAttempt.progressPercent}%` }" />
+              </div>
+            </div>
+
+            <div class="feature-card__actions">
+              <RouterLink :to="{ path: '/practice', query: { resume: 'active' } }">
+                <el-button type="primary" size="large">
+                  <el-icon><EditPen /></el-icon>
+                  <span>Продолжить</span>
+                </el-button>
+              </RouterLink>
+              <el-button plain size="large" @click="resetActiveAttempt">
+                <el-icon><RefreshRight /></el-icon>
+                <span>Сбросить</span>
+              </el-button>
+            </div>
+          </article>
+
+          <article v-else class="feature-card feature-card--start">
+            <div class="feature-card__head">
+              <span class="feature-card__eyebrow">Быстрый старт</span>
+              <span class="feature-pill">Сейчас активной попытки нет</span>
+            </div>
+
+            <div class="feature-card__body">
+              <div>
+                <h2>Можно сразу вернуться к подготовке</h2>
+                <p>Запустите общий тест, зайдите в вопросы по двум PDF или откройте задачи GE-main для практики.</p>
+              </div>
+            </div>
+
+            <div class="feature-card__actions">
+              <RouterLink to="/practice">
+                <el-button type="primary" size="large">
+                  <el-icon><EditPen /></el-icon>
+                  <span>Открыть тесты</span>
+                </el-button>
+              </RouterLink>
+              <RouterLink to="/tasks">
+                <el-button plain size="large">
+                  <el-icon><Reading /></el-icon>
+                  <span>Открыть задачи</span>
+                </el-button>
+              </RouterLink>
+            </div>
+          </article>
+        </section>
+      </div>
+
+      <aside class="dashboard-priority__side">
+        <article class="feature-card feature-card--today">
+          <div class="feature-card__head">
+            <span class="feature-card__eyebrow">Сегодня</span>
+            <span class="feature-pill feature-pill--accent">{{ todaySnapshot.answeredCount }} ответов</span>
+          </div>
+
+          <div class="feature-card__body feature-card__body--stacked">
+            <div>
+              <h2>Прогресс за день</h2>
+              <p>Короткий срез без общей каши: сколько реально сделали сегодня и какие темы уже трогали.</p>
+            </div>
+
+            <div class="today-mini-grid">
+              <div class="today-mini-card">
+                <span>Отвечено</span>
+                <strong>{{ todaySnapshot.answeredCount }}</strong>
+              </div>
+              <div class="today-mini-card">
+                <span>Закреплено</span>
+                <strong>{{ todaySnapshot.masteredCount }}</strong>
+              </div>
+              <div class="today-mini-card">
+                <span>Тем затронуто</span>
+                <strong>{{ todaySnapshot.touchedSectionTitles.length }}</strong>
+              </div>
+            </div>
+
+            <div class="today-topics">
+              <span class="today-topics__label">Темы сегодня</span>
+              <div class="today-topics__chips">
+                <span v-for="title in todayTouchedPreview" :key="title" class="topic-chip">{{ title }}</span>
+                <span v-if="todaySnapshot.touchedSectionTitles.length === 0" class="topic-chip topic-chip--muted">
+                  Пока ничего не трогали
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        </article>
 
-        <div class="feature-card__actions">
-          <RouterLink :to="{ path: '/practice', query: { resume: 'active' } }">
-            <el-button type="primary" size="large">
-              <el-icon><EditPen /></el-icon>
-              <span>Продолжить</span>
-            </el-button>
-          </RouterLink>
-          <el-button plain size="large" @click="resetActiveAttempt">
-            <el-icon><RefreshRight /></el-icon>
-            <span>Сбросить</span>
-          </el-button>
-        </div>
-      </article>
-
-      <article v-else class="feature-card feature-card--start">
-        <div class="feature-card__head">
-          <span class="feature-card__eyebrow">Быстрый старт</span>
-          <span class="feature-pill">Сейчас активной попытки нет</span>
-        </div>
-
-        <div class="feature-card__body">
-          <div>
-            <h2>Можно сразу вернуться к подготовке</h2>
-            <p>Запустите общий тест, зайдите в вопросы по двум PDF или откройте задачи GE-main для практики.</p>
-          </div>
-        </div>
-
-        <div class="feature-card__actions">
-          <RouterLink to="/practice">
-            <el-button type="primary" size="large">
-              <el-icon><EditPen /></el-icon>
-              <span>Открыть тесты</span>
-            </el-button>
-          </RouterLink>
-          <RouterLink to="/tasks">
-            <el-button plain size="large">
-              <el-icon><Reading /></el-icon>
-              <span>Открыть задачи</span>
-            </el-button>
-          </RouterLink>
-        </div>
-      </article>
-
-      <article class="feature-card feature-card--today">
-        <div class="feature-card__head">
-          <span class="feature-card__eyebrow">Сегодня</span>
-          <span class="feature-pill feature-pill--accent">{{ todaySnapshot.answeredCount }} ответов</span>
-        </div>
-
-        <div class="feature-card__body feature-card__body--stacked">
-          <div>
-            <h2>Прогресс за день</h2>
-            <p>Короткий срез без общей каши: сколько реально сделали сегодня и какие темы уже трогали.</p>
-          </div>
-
-          <div class="today-mini-grid">
-            <div class="today-mini-card">
-              <span>Отвечено</span>
-              <strong>{{ todaySnapshot.answeredCount }}</strong>
-            </div>
-            <div class="today-mini-card">
-              <span>Закреплено</span>
-              <strong>{{ todaySnapshot.masteredCount }}</strong>
-            </div>
-            <div class="today-mini-card">
-              <span>Тем затронуто</span>
-              <strong>{{ todaySnapshot.touchedSectionTitles.length }}</strong>
-            </div>
-          </div>
-
-          <div class="today-topics">
-            <span class="today-topics__label">Темы сегодня</span>
-            <div class="today-topics__chips">
-              <span v-for="title in todayTouchedPreview" :key="title" class="topic-chip">{{ title }}</span>
-              <span v-if="todaySnapshot.touchedSectionTitles.length === 0" class="topic-chip topic-chip--muted">
-                Пока ничего не трогали
-              </span>
-            </div>
-          </div>
-        </div>
-      </article>
-    </section>
-
-    <section class="metrics-strip">
-      <article v-for="metric in metrics" :key="metric.label" class="metric-tile">
-        <el-icon class="metric-tile__icon"><component :is="metric.icon" /></el-icon>
-        <span class="metric-tile__label">{{ metric.label }}</span>
-        <strong class="metric-tile__value">{{ metric.value }}</strong>
-        <span class="metric-tile__note">{{ metric.note }}</span>
-      </article>
+        <section class="metrics-strip metrics-strip--compact">
+          <article
+            v-for="metric in metrics"
+            :key="metric.label"
+            class="metric-tile"
+            :class="`metric-tile--${metric.tone}`"
+          >
+            <el-icon class="metric-tile__icon"><component :is="metric.icon" /></el-icon>
+            <span class="metric-tile__label">{{ metric.label }}</span>
+            <strong class="metric-tile__value">{{ metric.value }}</strong>
+            <span class="metric-tile__note">{{ metric.note }}</span>
+          </article>
+        </section>
+      </aside>
     </section>
 
     <section v-if="stateExamPdfScope" class="dashboard-section">
@@ -692,7 +721,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .dashboard-page {
   display: grid;
-  gap: 28px;
+  gap: 34px;
 }
 
 .dashboard-intro {
@@ -739,20 +768,39 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 
+.dashboard-priority {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.95fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.dashboard-priority__main,
+.dashboard-priority__side {
+  min-width: 0;
+}
+
+.dashboard-priority__side {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 .dashboard-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
-  gap: 20px;
-  align-items: stretch;
+  grid-template-columns: 1fr;
+  gap: 0;
+  align-items: start;
 }
 
 .feature-card {
   display: grid;
-  gap: 20px;
-  min-height: 280px;
+  gap: 18px;
+  grid-template-rows: auto auto auto auto;
+  min-height: 0;
   border: 1px solid var(--app-border);
-  border-radius: 30px;
-  padding: 28px;
+  border-radius: 32px;
+  padding: 30px;
   background:
     linear-gradient(180deg, rgba(37, 99, 235, 0.08) 0%, rgba(13, 24, 41, 0) 100%),
     var(--app-surface-strong);
@@ -760,17 +808,30 @@ onBeforeUnmount(() => {
 }
 
 .feature-card--active {
+  border-color: rgba(96, 165, 250, 0.26);
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 36%),
-    linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(13, 24, 41, 0) 55%),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.24), transparent 36%),
+    linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(13, 24, 41, 0) 58%),
     var(--app-surface-strong);
+  box-shadow:
+    0 22px 44px rgba(2, 8, 23, 0.28),
+    inset 0 1px 0 rgba(191, 219, 254, 0.08);
 }
 
 .feature-card--today {
+  border-color: rgba(45, 212, 191, 0.22);
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.18), transparent 36%),
-    linear-gradient(180deg, rgba(37, 99, 235, 0.08) 0%, rgba(13, 24, 41, 0) 100%),
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(13, 148, 136, 0.12) 0%, rgba(13, 24, 41, 0) 100%),
     var(--app-surface-strong);
+  box-shadow:
+    0 18px 36px rgba(2, 8, 23, 0.22),
+    inset 0 1px 0 rgba(153, 246, 228, 0.05);
+}
+
+.feature-card--start {
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.28);
 }
 
 .feature-card__head {
@@ -815,6 +876,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   gap: 20px;
+  align-items: start;
 }
 
 .feature-card__body--stacked {
@@ -858,6 +920,10 @@ onBeforeUnmount(() => {
   background: rgba(18, 31, 52, 0.42);
 }
 
+.feature-stat {
+  min-width: 160px;
+}
+
 .feature-stat span,
 .today-mini-card span,
 .metric-tile__label {
@@ -872,6 +938,42 @@ onBeforeUnmount(() => {
   color: var(--app-text-strong);
   font-size: 32px;
   line-height: 1;
+}
+
+.hero-progress {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  border-radius: 22px;
+  padding: 16px 18px;
+  background: rgba(9, 20, 35, 0.46);
+}
+
+.hero-progress__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--app-muted);
+  font-size: 14px;
+}
+
+.hero-progress__head strong {
+  color: var(--app-text-strong);
+  font-size: 22px;
+}
+
+.hero-progress__track {
+  overflow: hidden;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.hero-progress__bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb 0%, #7dd3fc 100%);
 }
 
 .today-topics {
@@ -910,33 +1012,102 @@ onBeforeUnmount(() => {
 
 .metrics-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.metrics-strip--compact {
+  align-content: start;
 }
 
 .metric-tile {
   position: relative;
   display: grid;
-  gap: 4px;
-  min-height: 170px;
+  gap: 6px;
+  min-height: 132px;
   background: var(--app-surface);
+  overflow: hidden;
 }
 
 .metric-tile__icon {
-  color: var(--accent);
+  position: relative;
+  z-index: 1;
   font-size: 26px;
 }
 
 .metric-tile__value {
+  position: relative;
+  z-index: 1;
   color: var(--app-text-strong);
-  font-size: clamp(32px, 2.6vw, 44px);
+  font-size: clamp(28px, 2vw, 38px);
   line-height: 1.05;
 }
 
 .metric-tile__note {
+  position: relative;
+  z-index: 1;
   color: var(--app-muted);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.metric-tile__label {
+  position: relative;
+  z-index: 1;
+}
+
+.metric-tile::after {
+  content: '';
+  position: absolute;
+  inset: auto -32px -48px auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 999px;
+  opacity: 0.22;
+  filter: blur(8px);
+}
+
+.metric-tile--neutral::after {
+  background: rgba(148, 163, 184, 0.28);
+}
+
+.metric-tile--accent {
+  border-color: rgba(96, 165, 250, 0.24);
+}
+
+.metric-tile--accent::after {
+  background: rgba(37, 99, 235, 0.42);
+}
+
+.metric-tile--accent .metric-tile__icon {
+  color: #60a5fa;
+}
+
+.metric-tile--success {
+  border-color: rgba(45, 212, 191, 0.22);
+}
+
+.metric-tile--success::after {
+  background: rgba(45, 212, 191, 0.36);
+}
+
+.metric-tile--success .metric-tile__icon {
+  color: #5eead4;
+}
+
+.metric-tile--warm {
+  border-color: rgba(245, 158, 11, 0.22);
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(13, 24, 41, 0) 100%),
+    var(--app-surface);
+}
+
+.metric-tile--warm::after {
+  background: rgba(245, 158, 11, 0.36);
+}
+
+.metric-tile--warm .metric-tile__icon {
+  color: #fbbf24;
 }
 
 .dashboard-section {
@@ -963,7 +1134,9 @@ onBeforeUnmount(() => {
   border: 1px solid var(--app-border);
   border-radius: 28px;
   padding: 24px;
-  background: var(--app-surface);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(13, 24, 41, 0) 46%),
+    var(--app-surface);
   box-shadow: var(--app-shadow-soft);
 }
 
@@ -982,6 +1155,10 @@ onBeforeUnmount(() => {
   display: grid;
   align-content: start;
   gap: 12px;
+  padding: 4px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  border-radius: 22px;
+  background: rgba(12, 22, 38, 0.34);
 }
 
 .source-card__actions a,
@@ -1037,7 +1214,7 @@ onBeforeUnmount(() => {
 }
 
 .topics-grid--cards {
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .topics-grid--list {
@@ -1045,6 +1222,7 @@ onBeforeUnmount(() => {
 }
 
 .topic-card {
+  position: relative;
   display: grid;
   gap: 18px;
   border: 1px solid var(--app-border);
@@ -1052,6 +1230,33 @@ onBeforeUnmount(() => {
   padding: 22px;
   background: var(--app-surface);
   box-shadow: var(--app-shadow-soft);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.topic-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.topic-card--muted::before {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+.topic-card--info::before {
+  background: linear-gradient(180deg, #2563eb 0%, #60a5fa 100%);
+}
+
+.topic-card--warning::before {
+  background: linear-gradient(180deg, #f59e0b 0%, #fcd34d 100%);
+}
+
+.topic-card--success::before {
+  background: linear-gradient(180deg, #22c55e 0%, #86efac 100%);
 }
 
 .topic-card--list {
@@ -1171,11 +1376,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1440px) {
-  .dashboard-hero {
+  .dashboard-priority {
     grid-template-columns: 1fr;
   }
 
-  .metrics-strip {
+  .topics-grid--cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1212,6 +1417,14 @@ onBeforeUnmount(() => {
   .topic-card--list .topic-card__actions {
     justify-content: flex-start;
   }
+
+  .topics-grid--cards {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-strip {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 860px) {
@@ -1242,10 +1455,6 @@ onBeforeUnmount(() => {
   .topic-card__actions .el-button,
   .dashboard-intro__actions .el-button {
     width: 100%;
-  }
-
-  .metrics-strip {
-    grid-template-columns: 1fr;
   }
 
   .feature-card__stats {
