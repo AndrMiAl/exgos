@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Простые WEB решения</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      color: #222;
+    }
+
+    body.dark {
+      background: #181a20;
+      color: #f5f5f5;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .menu {
+      position: sticky;
+      top: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      background: white;
+      border-bottom: 1px solid #ddd;
+      z-index: 10;
+    }
+
+    body.dark .menu,
+    body.dark .task,
+    body.dark .card {
+      background: #242833;
+    }
+
+    button {
+      padding: 9px 12px;
+      border: 0;
+      border-radius: 6px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .task {
+      display: none;
+      margin-top: 18px;
+      padding: 18px;
+      background: white;
+      border-radius: 8px;
+    }
+
+    .task.active {
+      display: block;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .card {
+      padding: 14px;
+      background: #eef2f7;
+      border-radius: 8px;
+    }
+
+    input,
+    select {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 8px 0;
+      padding: 9px;
+    }
+
+    .error {
+      color: #d21f3c;
+      font-size: 14px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.65);
+    }
+
+    .modal.open {
+      display: grid;
+    }
+
+    .modal-box {
+      width: min(500px, 90vw);
+      padding: 20px;
+      background: white;
+      color: #222;
+      border-radius: 8px;
+    }
+
+    .hero {
+      min-height: 60vh;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: white;
+      background-image:
+        linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)),
+        url("https://picsum.photos/1400/800");
+      background-size: cover;
+      background-attachment: fixed;
+    }
+
+    @media (max-width: 800px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 520px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="menu">
+    <button onclick="showTask(1)">1. Метрики</button>
+    <button onclick="showTask(2)">2. Бронь</button>
+    <button onclick="showTask(3)">3. Рецепты</button>
+    <button onclick="showTask(4)">4. Визитка</button>
+    <button onclick="showTask(5)">5. Ремонт</button>
+    <button onclick="showTask(6)">6. Видео</button>
+    <button onclick="showTask(7)">7. Покупки</button>
+    <button onclick="showTask(8)">8. Вкладки</button>
+    <button onclick="showTask(9)">9. Фотограф</button>
+    <button onclick="showTask(10)">10. Ник</button>
+  </div>
+
+  <main class="page">
+    <section class="task active" id="task1">
+      <h2>Store Metrics</h2>
+      <button onclick="updateMetrics()">Обновить</button>
+      <div class="grid">
+        <div class="card">Заказы: <b id="orders">1200</b></div>
+        <div class="card">Средний чек: <b id="average">2400</b> ₽</div>
+        <div class="card">Возвраты: <b id="returns">2.4</b>%</div>
+      </div>
+    </section>
+
+    <section class="task" id="task2">
+      <h2>Бронирование столика</h2>
+      <form id="bookingForm">
+        <input id="nameInput" placeholder="Имя">
+        <div class="error" id="nameError"></div>
+        <input id="emailInput" placeholder="Email">
+        <div class="error" id="emailError"></div>
+        <input id="phoneInput" placeholder="+7XXXXXXXXXX">
+        <div class="error" id="phoneError"></div>
+        <input id="dateInput" type="datetime-local">
+        <div class="error" id="dateError"></div>
+        <select id="guestInput">
+          <option value="">Количество гостей</option>
+          <option>1</option>
+          <option>2</option>
+          <option>3</option>
+          <option>4</option>
+          <option>5</option>
+          <option>6</option>
+          <option>7</option>
+          <option>8</option>
+          <option>9</option>
+          <option>10</option>
+        </select>
+        <label><input id="mailingInput" type="checkbox"> Согласен на рассылку</label>
+        <button type="submit">Забронировать</button>
+      </form>
+    </section>
+
+    <section class="task" id="task3">
+      <h2>Рецепты и список покупок</h2>
+      <div class="grid" id="recipes"></div>
+      <h3>Список покупок</h3>
+      <ul id="basketList"></ul>
+      <button onclick="clearBasket()">Очистить корзину</button>
+    </section>
+
+    <section class="task" id="task4">
+      <h2>Визитка фрилансера</h2>
+      <label><input type="checkbox" id="themeToggle"> Темная тема</label>
+      <div class="grid">
+        <div class="card">Проект 1: HTML, CSS</div>
+        <div class="card">Проект 2: JavaScript</div>
+        <div class="card">Проект 3: React</div>
+      </div>
+      <blockquote>Клиент доволен работой.</blockquote>
+      <footer>GitHub | Telegram | Email</footer>
+    </section>
+
+    <section class="task" id="task5">
+      <h2>Калькулятор ремонта</h2>
+      <label>Площадь: <span id="areaText">10</span> м²</label>
+      <input id="areaInput" type="range" min="10" max="150" step="5" value="10">
+      <label><input id="cosmeticInput" type="checkbox"> Косметический ремонт</label>
+      <label><input id="capitalInput" type="checkbox"> Капитальный ремонт</label>
+      <label><input id="designInput" type="checkbox"> Дизайн-проект</label>
+      <input id="repairResult" readonly>
+      <button onclick="resetRepair()">Сброс</button>
+    </section>
+
+    <section class="task" id="task6">
+      <h2>Видео-превью</h2>
+      <div class="grid" id="videoList"></div>
+      <div class="modal" id="videoModal" onclick="closeVideo()">
+        <div class="modal-box" id="videoText"></div>
+      </div>
+    </section>
+
+    <section class="task" id="task7">
+      <h2>Список покупок</h2>
+      <input id="productInput" placeholder="Название продукта">
+      <button onclick="addProduct()">Добавить</button>
+      <p>
+        <button onclick="setFilter('all')">Все</button>
+        <button onclick="setFilter('active')">Не купленные</button>
+        <button onclick="setFilter('done')">Купленные</button>
+      </p>
+      <ul id="productList"></ul>
+      <button onclick="deleteBought()">Удалить купленные</button>
+    </section>
+
+    <section class="task" id="task8">
+      <h2>Вкладки профиля</h2>
+      <button onclick="showTab('about')">О себе</button>
+      <button onclick="showTab('achievements')">Достижения</button>
+      <button onclick="showTab('settings')">Настройки</button>
+      <div class="card" id="tabContent"></div>
+    </section>
+
+    <section class="task" id="task9">
+      <div class="hero">
+        <div>
+          <h1>Фотограф Анна</h1>
+          <a href="#photoServices"><button>Смотреть работы</button></a>
+        </div>
+      </div>
+      <h2 id="photoServices">Услуги</h2>
+      <div class="grid">
+        <div class="card">Свадьба</div>
+        <div class="card">Портрет</div>
+        <div class="card">Репортаж</div>
+      </div>
+      <h2>Контакты</h2>
+      <input placeholder="Имя">
+      <input placeholder="Телефон">
+    </section>
+
+    <section class="task" id="task10">
+      <h2>Генератор никнеймов</h2>
+      <label>Длина: <span id="nickLengthText">8</span></label>
+      <input id="nickLength" type="range" min="4" max="20" value="8">
+      <label><input class="nickSet" type="checkbox" value="abcdefghijklmnopqrstuvwxyz" checked> Буквы</label>
+      <label><input class="nickSet" type="checkbox" value="0123456789"> Цифры</label>
+      <label><input class="nickSet" type="checkbox" value="_-."> Символы</label>
+      <label><input class="nickSet" type="checkbox" value="ABCDEFGHIJKLMNOPQRSTUVWXYZ"> Заглавные</label>
+      <input id="nicknameResult" readonly>
+      <button onclick="generateNickname()">Сгенерировать</button>
+      <button onclick="copyNickname()">Копировать</button>
+      <p id="copyMessage"></p>
+    </section>
+  </main>
+
+  <script>
+    function showTask(number) {
+      var tasks = document.querySelectorAll(".task");
+
+      for (var i = 0; i < tasks.length; i++) {
+        tasks[i].classList.remove("active");
+      }
+
+      document.getElementById("task" + number).classList.add("active");
+    }
+
+    function updateMetrics() {
+      var orders = Number(document.getElementById("orders").textContent);
+      var average = Number(document.getElementById("average").textContent);
+      var returns = Number(document.getElementById("returns").textContent);
+
+      document.getElementById("orders").textContent = Math.round(orders * 1.03);
+      document.getElementById("average").textContent = average + 100;
+      document.getElementById("returns").textContent = (returns + 0.1).toFixed(1);
+    }
+
+    function validateBooking() {
+      var isValid = true;
+
+      if (!/^[А-Яа-яA-Za-z -]+$/.test(nameInput.value)) {
+        nameError.textContent = "Имя: только буквы, пробел и дефис";
+        isValid = false;
+      } else {
+        nameError.textContent = "";
+      }
+
+      if (!/^[^@]+@[^@]+\.[^@]+$/.test(emailInput.value)) {
+        emailError.textContent = "Введите правильный email";
+        isValid = false;
+      } else {
+        emailError.textContent = "";
+      }
+
+      if (!/^\+7\d{10}$/.test(phoneInput.value)) {
+        phoneError.textContent = "Телефон должен быть вида +7XXXXXXXXXX";
+        isValid = false;
+      } else {
+        phoneError.textContent = "";
+      }
+
+      var visitDate = new Date(dateInput.value);
+      var hour = visitDate.getHours();
+
+      if (!dateInput.value || visitDate < new Date() || hour < 10 || hour > 23) {
+        dateError.textContent = "Дата не раньше сегодня, время с 10:00 до 23:00";
+        isValid = false;
+      } else {
+        dateError.textContent = "";
+      }
+
+      if (!guestInput.value) {
+        isValid = false;
+      }
+
+      return isValid;
+    }
+
+    bookingForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+
+      if (validateBooking()) {
+        alert("Бронь принята");
+        console.log({
+          name: nameInput.value,
+          email: emailInput.value,
+          phone: phoneInput.value,
+          date: dateInput.value,
+          guests: guestInput.value,
+          mailing: mailingInput.checked
+        });
+      }
+    });
+
+    var recipesData = [
+      { name: "Пицца", products: { тесто: 1, сыр: 1, томат: 2 } },
+      { name: "Салат", products: { огурец: 2, томат: 2 } },
+      { name: "Паста", products: { паста: 1, сыр: 1 } }
+    ];
+
+    var basket = {};
+
+    function drawRecipes() {
+      recipes.innerHTML = "";
+
+      for (var i = 0; i < recipesData.length; i++) {
+        recipes.innerHTML +=
+          "<div class='card'><h3>" + recipesData[i].name + "</h3>" +
+          "<button onclick='addRecipe(" + i + ")'>Добавить ингредиенты</button></div>";
+      }
+    }
+
+    function addRecipe(index) {
+      var products = recipesData[index].products;
+
+      for (var name in products) {
+        if (!basket[name]) {
+          basket[name] = 0;
+        }
+
+        basket[name] += products[name];
+      }
+
+      drawBasket();
+    }
+
+    function drawBasket() {
+      basketList.innerHTML = "";
+
+      for (var name in basket) {
+        basketList.innerHTML += "<li>" + name + ": " + basket[name] + "</li>";
+      }
+    }
+
+    function clearBasket() {
+      basket = {};
+      drawBasket();
+    }
+
+    themeToggle.addEventListener("change", function () {
+      document.body.classList.toggle("dark", themeToggle.checked);
+      localStorage.setItem("theme", themeToggle.checked ? "dark" : "light");
+    });
+
+    if (localStorage.getItem("theme") === "dark") {
+      themeToggle.checked = true;
+      document.body.classList.add("dark");
+    }
+
+    function calculateRepair() {
+      var area = Number(areaInput.value);
+      var price = 0;
+
+      if (cosmeticInput.checked) {
+        price = 5000;
+      }
+
+      if (capitalInput.checked) {
+        price = 12000;
+      }
+
+      var total = area * price;
+
+      if (designInput.checked) {
+        total += 20000;
+      }
+
+      areaText.textContent = area;
+      repairResult.value = total.toLocaleString("ru-RU") + " ₽";
+    }
+
+    function resetRepair() {
+      areaInput.value = 10;
+      cosmeticInput.checked = false;
+      capitalInput.checked = false;
+      designInput.checked = false;
+      calculateRepair();
+    }
+
+    areaInput.addEventListener("input", calculateRepair);
+    cosmeticInput.addEventListener("change", calculateRepair);
+    capitalInput.addEventListener("change", calculateRepair);
+    designInput.addEventListener("change", calculateRepair);
+
+    function drawVideos() {
+      videoList.innerHTML = "";
+
+      for (var i = 1; i <= 6; i++) {
+        videoList.innerHTML +=
+          "<div class='card' onclick='openVideo(" + i + ")'>Видео " + i + "</div>";
+      }
+    }
+
+    function openVideo(number) {
+      videoText.innerHTML = "<h3>Видео " + number + "</h3><p>Здесь открывается плеер.</p>";
+      videoModal.classList.add("open");
+    }
+
+    function closeVideo() {
+      videoModal.classList.remove("open");
+    }
+
+    var products = JSON.parse(localStorage.getItem("products") || "[]");
+    var productFilter = "all";
+
+    function saveProducts() {
+      localStorage.setItem("products", JSON.stringify(products));
+      drawProducts();
+    }
+
+    function addProduct() {
+      if (productInput.value.trim()) {
+        products.push({ text: productInput.value.trim(), done: false });
+        productInput.value = "";
+        saveProducts();
+      }
+    }
+
+    function setFilter(filter) {
+      productFilter = filter;
+      drawProducts();
+    }
+
+    function drawProducts() {
+      productList.innerHTML = "";
+
+      for (var i = 0; i < products.length; i++) {
+        var product = products[i];
+
+        if (productFilter === "active" && product.done) {
+          continue;
+        }
+
+        if (productFilter === "done" && !product.done) {
+          continue;
+        }
+
+        productList.innerHTML +=
+          "<li><label><input type='checkbox' onchange='toggleProduct(" + i + ")' " +
+          (product.done ? "checked" : "") + "> " + product.text +
+          "</label> <button onclick='deleteProduct(" + i + ")'>x</button></li>";
+      }
+    }
+
+    function toggleProduct(index) {
+      products[index].done = !products[index].done;
+      saveProducts();
+    }
+
+    function deleteProduct(index) {
+      products.splice(index, 1);
+      saveProducts();
+    }
+
+    function deleteBought() {
+      products = products.filter(function (product) {
+        return !product.done;
+      });
+
+      saveProducts();
+    }
+
+    function showTab(tabName) {
+      if (tabName === "about") {
+        tabContent.innerHTML = "<p>Информация о пользователе и аватар.</p>";
+      } else if (tabName === "achievements") {
+        tabContent.innerHTML = "<ul><li>Медаль</li><li>Сертификат</li></ul>";
+      } else {
+        tabContent.innerHTML =
+          "<label><input type='checkbox'> Принимать уведомления</label>" +
+          "<br><button>Сохранить</button>";
+      }
+    }
+
+    nickLength.addEventListener("input", function () {
+      nickLengthText.textContent = nickLength.value;
+    });
+
+    function generateNickname() {
+      var checkedSets = document.querySelectorAll(".nickSet:checked");
+      var chars = "";
+
+      for (var i = 0; i < checkedSets.length; i++) {
+        chars += checkedSets[i].value;
+      }
+
+      if (chars === "") {
+        chars = "abcdefghijklmnopqrstuvwxyz";
+      }
+
+      var result = "";
+      var length = Number(nickLength.value);
+
+      for (var j = 0; j < length; j++) {
+        var randomIndex = Math.floor(Math.random() * chars.length);
+        result += chars[randomIndex];
+      }
+
+      nicknameResult.value = result;
+    }
+
+    function copyNickname() {
+      navigator.clipboard.writeText(nicknameResult.value);
+      copyMessage.textContent = "Скопировано";
+    }
+
+    drawRecipes();
+    drawVideos();
+    drawProducts();
+    showTab("about");
+    calculateRepair();
+  </script>
+</body>
+</html>
