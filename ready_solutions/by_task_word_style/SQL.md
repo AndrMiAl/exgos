@@ -28,17 +28,20 @@ WITH client_stats AS (
         c.first_name,
         c.middle_name,
         COUNT(r.id) AS total_rentals,
-        COUNT(*) FILTER (
-            WHERE r.fact_return IS NOT NULL
-              AND r.fact_return <= r.end_date
-        ) AS returned_on_time,
-        COUNT(*) FILTER (
-            WHERE r.fact_return IS NOT NULL
-              AND r.fact_return > r.end_date
-        ) AS returned_late,
-        COUNT(*) FILTER (
-            WHERE r.fact_return IS NULL
-        ) AS not_returned,
+        SUM(CASE
+            WHEN r.fact_return IS NOT NULL
+             AND r.fact_return <= r.end_date THEN 1
+            ELSE 0
+        END) AS returned_on_time,
+        SUM(CASE
+            WHEN r.fact_return IS NOT NULL
+             AND r.fact_return > r.end_date THEN 1
+            ELSE 0
+        END) AS returned_late,
+        SUM(CASE
+            WHEN r.fact_return IS NULL THEN 1
+            ELSE 0
+        END) AS not_returned,
         COUNT(DISTINCT cm.id_supplier) AS suppliers_count
     FROM client c
     JOIN rental r ON r.id_client = c.id
@@ -46,11 +49,33 @@ WITH client_stats AS (
     JOIN carmodel cm ON cm.id = v.id_carmodel
     GROUP BY c.id, c.last_name, c.first_name, c.middle_name
 ),
-client_penalty AS (
+penalties AS (
     SELECT
-        *,
-        returned_late * 2 + not_returned * 5 AS penalty_score
-    FROM client_stats
+        cs1.id,
+        cs1.last_name,
+        cs1.first_name,
+        cs1.middle_name,
+        cs1.total_rentals,
+        cs1.returned_on_time,
+        cs1.returned_late,
+        cs1.not_returned,
+        cs1.returned_late * 2 + cs1.not_returned * 5 AS penalty_score,
+        COUNT(DISTINCT cs2.returned_late * 2 + cs2.not_returned * 5) + 1 AS discipline_rank,
+        cs1.suppliers_count
+    FROM client_stats cs1
+    LEFT JOIN client_stats cs2
+      ON cs2.returned_late * 2 + cs2.not_returned * 5
+         < cs1.returned_late * 2 + cs1.not_returned * 5
+    GROUP BY
+        cs1.id,
+        cs1.last_name,
+        cs1.first_name,
+        cs1.middle_name,
+        cs1.total_rentals,
+        cs1.returned_on_time,
+        cs1.returned_late,
+        cs1.not_returned,
+        cs1.suppliers_count
 )
 SELECT
     last_name,
@@ -61,9 +86,9 @@ SELECT
     returned_late,
     not_returned,
     penalty_score,
-    RANK() OVER (ORDER BY penalty_score ASC) AS discipline_rank,
+    discipline_rank,
     suppliers_count
-FROM client_penalty
+FROM penalties
 WHERE penalty_score > 0
    OR total_rentals >= 3
 ORDER BY discipline_rank, last_name, first_name;
@@ -106,8 +131,8 @@ JOIN client c1 ON c1.id = r1.id_client
 JOIN client c2 ON c2.id = r2.id_client
 JOIN vehicle v ON v.id = r1.id_vehicle
 JOIN carmodel cm ON cm.id = v.id_carmodel
-WHERE r1.start_date <= COALESCE(r2.fact_return, DATE '2026-06-09')
-  AND r2.start_date <= COALESCE(r1.fact_return, DATE '2026-06-09')
+WHERE r1.start_date <= COALESCE(r2.fact_return, DATE('2026-06-09'))
+  AND r2.start_date <= COALESCE(r1.fact_return, DATE('2026-06-09'))
 ORDER BY v.vin_number, first_client, second_client;
 ```
 
@@ -126,12 +151,12 @@ ORDER BY v.vin_number, first_client, second_client;
 **Решение:**
 
 ```sql
-WITH days AS (
-    SELECT generate_series(
-        DATE '2024-03-01',
-        DATE '2024-04-30',
-        INTERVAL '1 day'
-    )::date AS day_date
+WITH RECURSIVE days AS (
+    SELECT DATE('2024-03-01') AS day_date
+    UNION ALL
+    SELECT DATEADD(day, 1, day_date)
+    FROM days
+    WHERE day_date < DATE('2024-04-30')
 ),
 daily_rentals AS (
     SELECT
@@ -141,34 +166,39 @@ daily_rentals AS (
     LEFT JOIN rental r
         ON r.start_date = d.day_date
     GROUP BY d.day_date
+),
+avg_7 AS (
+    SELECT
+        d1.day_date,
+        ROUND(AVG(d2.rentals_count), 2) AS avg_last_7_days
+    FROM daily_rentals d1
+    JOIN daily_rentals d2
+      ON d2.day_date BETWEEN DATEADD(day, -6, d1.day_date) AND d1.day_date
+    GROUP BY d1.day_date
+),
+avg_30 AS (
+    SELECT
+        d1.day_date,
+        ROUND(AVG(d2.rentals_count), 2) AS avg_last_30_days
+    FROM daily_rentals d1
+    JOIN daily_rentals d2
+      ON d2.day_date BETWEEN DATEADD(day, -29, d1.day_date) AND d1.day_date
+    GROUP BY d1.day_date
 )
 SELECT
-    day_date,
-    rentals_count,
-    ROUND(
-        AVG(rentals_count) OVER (
-            ORDER BY day_date
-            ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
-        ),
-        2
-    ) AS avg_last_7_days,
-    ROUND(
-        AVG(rentals_count) OVER (
-            ORDER BY day_date
-            ROWS BETWEEN 29 PRECEDING AND CURRENT ROW
-        ),
-        2
-    ) AS avg_last_30_days,
+    d.day_date,
+    d.rentals_count,
+    a7.avg_last_7_days,
+    a30.avg_last_30_days,
     CASE
-        WHEN rentals_count > 2 * AVG(rentals_count) OVER (
-            ORDER BY day_date
-            ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
-        )
+        WHEN d.rentals_count > 2 * a7.avg_last_7_days
         THEN 'YES'
         ELSE 'NO'
     END AS is_peak_day
-FROM daily_rentals
-ORDER BY day_date;
+FROM daily_rentals d
+JOIN avg_7 a7 ON a7.day_date = d.day_date
+JOIN avg_30 a30 ON a30.day_date = d.day_date
+ORDER BY d.day_date;
 ```
 
 ## Задание_4
@@ -222,24 +252,40 @@ ORDER BY c.last_name, c.first_name;
 **Решение:**
 
 ```sql
+WITH vehicle_stats AS (
+    SELECT
+        s.id,
+        s.name AS supplier_name,
+        cm.id AS model_id,
+        v.id AS vehicle_id,
+        MAX(CASE
+            WHEN r.id IS NULL THEN 0
+            ELSE 1
+        END) AS was_rented
+    FROM supplier s
+    LEFT JOIN carmodel cm ON cm.id_supplier = s.id
+    LEFT JOIN vehicle v ON v.id_carmodel = cm.id
+    LEFT JOIN rental r ON r.id_vehicle = v.id
+    GROUP BY s.id, s.name, cm.id, v.id
+)
 SELECT
-    s.name AS supplier_name,
-    COUNT(DISTINCT v.id) AS total_vehicles,
-    COUNT(DISTINCT cm.id) AS different_models,
-    COUNT(DISTINCT v.id) FILTER (
-        WHERE r.id IS NULL
-    ) AS never_rented_vehicles,
+    supplier_name,
+    COUNT(DISTINCT vehicle_id) AS total_vehicles,
+    COUNT(DISTINCT model_id) AS different_models,
+    SUM(CASE
+        WHEN was_rented = 0 AND vehicle_id IS NOT NULL THEN 1
+        ELSE 0
+    END) AS never_rented_vehicles,
     ROUND(
-        100.0 * COUNT(DISTINCT v.id) FILTER (WHERE r.id IS NULL)
-        / NULLIF(COUNT(DISTINCT v.id), 0),
+        100.0 * SUM(CASE
+            WHEN was_rented = 0 AND vehicle_id IS NOT NULL THEN 1
+            ELSE 0
+        END) / NULLIF(COUNT(DISTINCT vehicle_id), 0),
         2
     ) AS never_rented_percent
-FROM supplier s
-LEFT JOIN carmodel cm ON cm.id_supplier = s.id
-LEFT JOIN vehicle v ON v.id_carmodel = cm.id
-LEFT JOIN rental r ON r.id_vehicle = v.id
-GROUP BY s.id, s.name
-ORDER BY s.name;
+FROM vehicle_stats
+GROUP BY id, supplier_name
+ORDER BY supplier_name;
 ```
 
 ## Задание_6
@@ -264,21 +310,27 @@ SELECT
     c.first_name,
     c.middle_name,
     COUNT(r.id) AS total_rentals,
-    COUNT(*) FILTER (
-        WHERE r.fact_return IS NULL
-    ) AS not_returned,
-    COUNT(*) FILTER (
-        WHERE r.fact_return IS NOT NULL
-          AND r.fact_return > r.end_date
-    ) AS returned_late
+    SUM(CASE
+        WHEN r.fact_return IS NULL THEN 1
+        ELSE 0
+    END) AS not_returned,
+    SUM(CASE
+        WHEN r.fact_return IS NOT NULL
+         AND r.fact_return > r.end_date THEN 1
+        ELSE 0
+    END) AS returned_late
 FROM client c
 JOIN rental r ON r.id_client = c.id
 GROUP BY c.id, c.last_name, c.first_name, c.middle_name
-HAVING COUNT(*) FILTER (WHERE r.fact_return IS NULL) > 0
-   AND COUNT(*) FILTER (
-        WHERE r.fact_return IS NOT NULL
-          AND r.fact_return <= r.end_date
-   ) = 0
+HAVING SUM(CASE
+           WHEN r.fact_return IS NULL THEN 1
+           ELSE 0
+       END) > 0
+   AND SUM(CASE
+           WHEN r.fact_return IS NOT NULL
+            AND r.fact_return <= r.end_date THEN 1
+           ELSE 0
+       END) = 0
 ORDER BY c.last_name, c.first_name;
 ```
 
@@ -339,9 +391,10 @@ WITH model_stats AS (
         cm.model_name,
         COUNT(r.id) AS total_rentals,
         COUNT(DISTINCT r.id_client) AS unique_clients,
-        ROUND(AVG(r.fact_return - r.start_date) FILTER (
-            WHERE r.fact_return IS NOT NULL
-        ), 2) AS avg_duration_days
+        ROUND(AVG(CASE
+            WHEN r.fact_return IS NOT NULL THEN r.fact_return - r.start_date
+            ELSE NULL
+        END), 2) AS avg_duration_days
     FROM carmodel cm
     JOIN vehicle v ON v.id_carmodel = cm.id
     JOIN rental r ON r.id_vehicle = v.id
@@ -443,13 +496,14 @@ WITH ordered_rentals AS (
         r.id_client,
         r.start_date,
         cm.model_name,
-        LAG(r.start_date) OVER (
-            PARTITION BY r.id_client
-            ORDER BY r.start_date
-        ) AS prev_start_date
+        MAX(prev.start_date) AS prev_start_date
     FROM rental r
     JOIN vehicle v ON v.id = r.id_vehicle
     JOIN carmodel cm ON cm.id = v.id_carmodel
+    LEFT JOIN rental prev
+      ON prev.id_client = r.id_client
+     AND prev.start_date < r.start_date
+    GROUP BY r.id, r.id_client, r.start_date, cm.model_name
 ),
 marked_groups AS (
     SELECT
@@ -476,19 +530,38 @@ series_stats AS (
         group_id,
         COUNT(*) AS series_length,
         MIN(start_date) AS series_start,
-        MAX(start_date) AS series_end,
-        STRING_AGG(model_name, ', ' ORDER BY start_date) AS models_list
+        MAX(start_date) AS series_end
     FROM grouped_rentals
     GROUP BY id_client, group_id
 ),
+series_models AS (
+    SELECT
+        ordered_groups.id_client,
+        ordered_groups.group_id,
+        REPLACE(GROUP_CONCAT(ordered_groups.model_name), ',', ', ') AS models_list
+    FROM (
+        SELECT
+            id_client,
+            group_id,
+            model_name,
+            start_date
+        FROM grouped_rentals
+        ORDER BY id_client, group_id, start_date
+    ) AS ordered_groups
+    GROUP BY ordered_groups.id_client, ordered_groups.group_id
+),
 ranked_series AS (
     SELECT
-        *,
+        ss.*,
+        sm.models_list,
         ROW_NUMBER() OVER (
-            PARTITION BY id_client
+            PARTITION BY ss.id_client
             ORDER BY series_length DESC, series_start DESC
         ) AS rn
-    FROM series_stats
+    FROM series_stats ss
+    JOIN series_models sm
+      ON sm.id_client = ss.id_client
+     AND sm.group_id = ss.group_id
 )
 SELECT
     c.last_name,

@@ -153,6 +153,10 @@ function panelOptions(task: ViewTask) {
 function getCodeKey(taskId: string) {
   const task = taskById.get(taskId)
 
+  if (task?.path.startsWith('exam/')) {
+    return `ge-task-code:v5:${taskId}`
+  }
+
   if (task?.runner?.language === 'html') {
     return `ge-task-code:v3:${taskId}`
   }

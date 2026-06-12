@@ -71,6 +71,8 @@ L0 = 2, L1 = 1, Ln = Ln-1 + Ln-2
 **Решение:**
 
 ```python
+import time
+
 def generate_sequence(n):
     first = 2
     second = 1
@@ -88,17 +90,15 @@ def lucas_recursive(k):
 
     return lucas_recursive(k - 1) + lucas_recursive(k - 2)
 
+def lucas_memo(k, memo=None):
+    if memo is None:
+        memo = {0: 2, 1: 1}
 
-@lru_cache(None)
+    if k in memo:
+        return memo[k]
 
-def lucas_memo(k):
-    if k == 0:
-        return 2
-
-    if k == 1:
-        return 1
-
-    return lucas_memo(k - 1) + lucas_memo(k - 2)
+    memo[k] = lucas_memo(k - 1, memo) + lucas_memo(k - 2, memo)
+    return memo[k]
 
 def compare_lucas_performance(n):
     start = time.perf_counter()
@@ -106,11 +106,13 @@ def compare_lucas_performance(n):
     print("generator:", round((time.perf_counter() - start) * 1000, 3), "ms")
 
     start = time.perf_counter()
-    [lucas_recursive(i) for i in range(n)]
+    for i in range(n):
+        lucas_recursive(i)
     print("recursive:", round((time.perf_counter() - start) * 1000, 3), "ms")
 
     start = time.perf_counter()
-    [lucas_memo(i) for i in range(n)]
+    for i in range(n):
+        lucas_memo(i)
     print("memo:", round((time.perf_counter() - start) * 1000, 3), "ms")
 ```
 
@@ -171,6 +173,8 @@ group — строка
 **Решение:**
 
 ```python
+from datetime import datetime
+
 def process_time_series(records):
     prepared = []
 
@@ -234,8 +238,9 @@ def process_time_series(records):
 **Решение:**
 
 ```python
+import time
+
 def trace_calls(func):
-    @wraps(func)
     def wrapper(*args, **kwargs):
         start = time.perf_counter()
         result = func(*args, **kwargs)
@@ -289,6 +294,8 @@ RightTriangle(a, b) — площадь (a*b)/2
 **Решение:**
 
 ```python
+from math import pi
+
 class Figure:
     def get_area(self):
         return 0
@@ -305,7 +312,7 @@ class Disk(Figure):
         self.radius = radius
 
     def get_area(self):
-        return math.pi * self.radius ** 2
+        return pi * self.radius ** 2
 
 class RightTriangle(Figure):
     def __init__(self, a, b):

@@ -30,8 +30,28 @@ function sanitizeAliases(query: string) {
   })
 }
 
+function normalizeDateLiterals(query: string) {
+  return query.replace(/\bDATE\s+'([^']+)'/gi, "DATE('$1')")
+}
+
+function rewriteFilterClauses(query: string) {
+  return query
+    .replace(
+      /\bCOUNT\s*\(\s*\*\s*\)\s+FILTER\s*\(\s*WHERE\s+([\s\S]*?)\s*\)/gi,
+      'SUM(CASE WHEN $1 THEN 1 ELSE 0 END)',
+    )
+    .replace(
+      /\bCOUNT\s*\(\s*DISTINCT\s+([\s\S]*?)\s*\)\s+FILTER\s*\(\s*WHERE\s+([\s\S]*?)\s*\)/gi,
+      'COUNT(DISTINCT CASE WHEN $2 THEN $1 ELSE NULL END)',
+    )
+    .replace(
+      /\bAVG\s*\(\s*([\s\S]*?)\s*\)\s+FILTER\s*\(\s*WHERE\s+([\s\S]*?)\s*\)/gi,
+      'AVG(CASE WHEN $2 THEN $1 ELSE NULL END)',
+    )
+}
+
 function normalizeQuery(query: string) {
-  return sanitizeAliases(query)
+  return sanitizeAliases(rewriteFilterClauses(normalizeDateLiterals(query)))
     .replace(/_GIA\.dbo\./gi, '')
     .replace(
       /([A-Za-z0-9_]+\.[A-Za-z0-9_]*date_trip)\s*\+\s*([A-Za-z0-9_]+\.[A-Za-z0-9_]*time_out)/gi,
@@ -60,7 +80,7 @@ function validateReadOnlyQuery(query: string) {
     return 'Учебная SQL-база доступна только на чтение: используй только SELECT или WITH.'
   }
 
-  if (/\b(insert|update|delete|drop|alter|create|truncate|merge|replace|grant|revoke)\b/.test(lowered)) {
+  if (/\b(insert|update|delete|drop|alter|create|truncate|merge|grant|revoke)\b/.test(lowered)) {
     return 'Изменять учебную SQL-базу нельзя. Разрешены только SELECT и WITH.'
   }
 

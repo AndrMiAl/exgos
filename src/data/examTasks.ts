@@ -5,8 +5,9 @@ import javaWordTasks from '../../ready_solutions/by_task_word_style/JAVA.md?raw'
 import mlWordTasks from '../../ready_solutions/by_task_word_style/ML.md?raw'
 import pythonWordTasks from '../../ready_solutions/by_task_word_style/PYTHON.md?raw'
 import sqlWordTasks from '../../ready_solutions/by_task_word_style/SQL.md?raw'
+import webWordTasks from '../../ready_solutions/by_task_word_style/WEB.md?raw'
 
-type ExamTaskLanguage = 'python' | 'java' | 'sql'
+type ExamTaskLanguage = 'python' | 'java' | 'sql' | 'web'
 
 export type ExamTaskMeta = {
   id: string
@@ -61,6 +62,10 @@ function buildSqlRunner(): GeTaskRunner {
 }
 
 function buildSourceLabel(language: ExamTaskLanguage) {
+  if (language === 'web') {
+    return 'WEB-решение'
+  }
+
   if (language === 'sql') {
     return 'SQL-решение'
   }
@@ -73,6 +78,10 @@ function buildSourceLabel(language: ExamTaskLanguage) {
 }
 
 function buildTaskExtension(language: ExamTaskLanguage) {
+  if (language === 'web') {
+    return 'html'
+  }
+
   if (language === 'sql') {
     return 'sql'
   }
@@ -157,5 +166,11 @@ export const examTaskSections: ExamTaskSectionMeta[] = [
     title: 'Java',
     description: 'Задачи из Word по Java. Здесь доступны условия и готовые решения по номерам.',
     tasks: parseWordTasks(javaWordTasks, 'java', 'java'),
+  },
+  {
+    id: 'web',
+    title: 'WEB',
+    description: 'Задачи из Word по web-разработке. Здесь доступны условия и готовые решения по номерам.',
+    tasks: parseWordTasks(webWordTasks, 'web', 'web'),
   },
 ]

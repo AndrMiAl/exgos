@@ -114,37 +114,6 @@ public String compressWithMinRange(int[] rawData) {
         return String.join(",", parts);
     }
 
-public String compressWithMinRange(int[] rawData) {
-        if (rawData.length == 0) {
-            return "";
-        }
-
-        TreeSet<Integer> numbers = new TreeSet<>();
-
-        for (int number : rawData) {
-            numbers.add(number);
-        }
-
-        List<String> parts = new ArrayList<>();
-
-        int start = numbers.first();
-        int previous = numbers.first();
-
-        for (int number : numbers.tailSet(numbers.first(), false)) {
-            if (number == previous + 1) {
-                previous = number;
-            } else {
-                addRange(parts, start, previous);
-                start = number;
-                previous = number;
-            }
-        }
-
-        addRange(parts, start, previous);
-
-        return String.join(",", parts);
-    }
-
     private void addRange(List<String> parts, int start, int end) {
         int length = end - start + 1;
 
