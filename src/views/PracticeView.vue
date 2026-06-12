@@ -1349,14 +1349,14 @@ watch(
             <h3>Общие режимы подготовки</h3>
           </div>
           <p class="muted section-block__hint">
-            Выберите, как проходить общий банк: обычный режим, антизапоминание, заучивание или финальный ГЭК.
+            Настройки сверху применяются ко всем запускам: обычный проход, закрепление, антизапоминание и ГЭК.
           </p>
         </div>
 
       <div class="section-picker section-picker--modes">
         <el-card shadow="never" class="section-option section-option--overall">
-          <span>Смешанный режим</span>
-          <strong>Обычный проход</strong>
+          <span>Общий банк</span>
+          <strong>Все темы</strong>
           <small>
             Доступно: {{ overallSummary.availableQuestions }} из {{ overallSummary.totalQuestions }}
             · Изучено: {{ overallSummary.masteredQuestions }}
@@ -1378,87 +1378,37 @@ watch(
               <span>{{ overallKnowledge.masteredQuestions }} из {{ overallKnowledge.totalQuestions }} изучено</span>
             </div>
           </div>
-          <el-button
-            type="primary"
-            :icon="Select"
-            :disabled="adaptiveQuestionCount === 0"
-            @click="startAdaptiveAttempt"
-          >
-            Начать обычный режим · {{ adaptiveQuestionCount }}
-          </el-button>
-        </el-card>
-
-        <el-card shadow="never" class="section-option section-option--overall section-option--anti">
-          <span>Антизапоминание</span>
-          <strong>Похожие ловушки</strong>
-          <small>
-            Варианты ответов похожи по смыслу, но формулируются чуть иначе.
-            Ловушки, на которых вы уже ошибались, возвращаются чаще.
-          </small>
-          <div class="knowledge-meter">
-            <div class="knowledge-meter__header">
-              <span>Меньше запоминания кнопок</span>
-              <strong :style="{ color: overallKnowledge.knowledgeColor }">{{ overallKnowledge.knowledgePercent }}%</strong>
-            </div>
-            <el-progress
-              :percentage="overallKnowledge.knowledgePercent"
-              :show-text="false"
-              :stroke-width="10"
-              :color="overallKnowledge.knowledgeColor"
-              class="knowledge-progress"
-            />
-            <div class="knowledge-meter__footer">
-              <span>Подходит после того, как вы уже освоили основной банк</span>
-              <span>{{ antiMemoryQuestionCount }} вопросов готовы к прогону</span>
-            </div>
+          <div class="section-option__actions section-option__actions--matrix">
+            <el-button
+              type="primary"
+              :icon="Select"
+              :disabled="adaptiveQuestionCount === 0"
+              @click="startAdaptiveAttempt"
+            >
+              Обычный проход · {{ adaptiveQuestionCount }}
+            </el-button>
+            <el-button
+              type="warning"
+              plain
+              :icon="Select"
+              :disabled="memorizeQuestionCount === 0"
+              @click="startMemorizeAttempt"
+            >
+              До закрепления · {{ memorizeQuestionCount }}
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              :icon="Select"
+              :disabled="antiMemoryQuestionCount === 0"
+              @click="startAntiMemoryAttempt"
+            >
+              Антизапоминание · {{ antiMemoryQuestionCount }}
+            </el-button>
+            <el-button plain @click="resetMemorizationProgress('all')">
+              Сбросить закрепление
+            </el-button>
           </div>
-          <el-button
-            type="danger"
-            plain
-            :icon="Select"
-            :disabled="antiMemoryQuestionCount === 0"
-            @click="startAntiMemoryAttempt"
-          >
-            Антизапоминание · {{ antiMemoryQuestionCount }}
-          </el-button>
-        </el-card>
-
-        <el-card shadow="never" class="section-option section-option--overall section-option--memorize">
-          <span>Режим заучивания</span>
-          <strong>До полного закрепления</strong>
-          <small>
-            Вопросы повторяются случайно, пока каждый не получит {{ masteryTarget }} верных ответа.
-            Сейчас осталось: {{ memorizeQuestionCount }}
-          </small>
-          <div class="knowledge-meter">
-            <div class="knowledge-meter__header">
-              <span>Закреплено вопросов</span>
-              <strong :style="{ color: overallKnowledge.knowledgeColor }">{{ overallKnowledge.knowledgePercent }}%</strong>
-            </div>
-            <el-progress
-              :percentage="overallKnowledge.knowledgePercent"
-              :show-text="false"
-              :stroke-width="10"
-              :color="overallKnowledge.knowledgeColor"
-              class="knowledge-progress"
-            />
-            <div class="knowledge-meter__footer">
-              <span>Проверка сразу, потому что от нее зависит следующий повтор</span>
-              <span>{{ overallKnowledge.masteredQuestions }} из {{ overallKnowledge.totalQuestions }} уже закреплено</span>
-            </div>
-          </div>
-          <el-button
-            type="warning"
-            plain
-            :icon="Select"
-            :disabled="memorizeQuestionCount === 0"
-            @click="startMemorizeAttempt"
-          >
-            До закрепления · {{ memorizeQuestionCount }}
-          </el-button>
-          <el-button plain @click="resetMemorizationProgress('all')">
-            Сбросить закрепление
-          </el-button>
         </el-card>
 
         <el-card shadow="never" class="section-option section-option--gek">
@@ -1485,15 +1435,17 @@ watch(
               <span>{{ overallKnowledge.masteredQuestions }} вопросов уже закреплено</span>
             </div>
           </div>
-          <el-button
-            type="success"
-            plain
-            :icon="Select"
-            :disabled="balancedQuestionCount === 0"
-            @click="startBalancedAttempt"
-          >
-            Запустить ГЭК · {{ balancedQuestionCount }}
-          </el-button>
+          <div class="section-option__actions">
+            <el-button
+              type="success"
+              plain
+              :icon="Select"
+              :disabled="balancedQuestionCount === 0"
+              @click="startBalancedAttempt"
+            >
+              Запустить ГЭК · {{ balancedQuestionCount }}
+            </el-button>
+          </div>
         </el-card>
       </div>
 

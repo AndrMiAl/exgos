@@ -1,6 +1,6 @@
 import alasql from 'alasql'
 
-import { geSqlScenarios, type GeSqlScenario, type SqlSeedRow } from '@/data/geSqlScenarios'
+import { geSqlScenarios, type GeSqlScenario, type GeSqlScenarioId, type SqlSeedRow } from '@/data/geSqlScenarios'
 
 export type SqlRunResult = {
   status: 'ok' | 'error'
@@ -137,7 +137,7 @@ function toComparableRows(rows: Array<Array<string | number | null>>) {
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
 }
 
-function executeQuery(query: string, scenarioId: keyof typeof geSqlScenarios): SqlRunResult {
+function executeQuery(query: string, scenarioId: GeSqlScenarioId): SqlRunResult {
   const scenario = geSqlScenarios[scenarioId]
 
   if (!scenario) {
@@ -183,14 +183,14 @@ function executeQuery(query: string, scenarioId: keyof typeof geSqlScenarios): S
   }
 }
 
-export function runSqlQuery(query: string, scenarioId: keyof typeof geSqlScenarios) {
+export function runSqlQuery(query: string, scenarioId: GeSqlScenarioId) {
   return executeQuery(query, scenarioId)
 }
 
 export function compareSqlResults(
   userQuery: string,
   solutionQuery: string,
-  scenarioId: keyof typeof geSqlScenarios,
+  scenarioId: GeSqlScenarioId,
 ) {
   const actual = executeQuery(userQuery, scenarioId)
   const expected = executeQuery(solutionQuery, scenarioId)

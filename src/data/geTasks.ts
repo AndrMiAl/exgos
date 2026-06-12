@@ -17,9 +17,9 @@ export type GeTaskSectionMeta = {
   tasks: GeTaskMeta[]
 }
 
-const codeResult = 'Готовый код решения из архива GE-main.'
-const sqlResult = 'Готовый SQL-запрос из архива GE-main.'
-const webResult = 'Готовая HTML/CSS-страница из архива GE-main.'
+const codeResult = 'Готовый код решения из встроенного тренажёра.'
+const sqlResult = 'Готовый SQL-запрос из встроенного тренажёра.'
+const webResult = 'Готовая HTML/CSS-страница из встроенного тренажёра.'
 
 export const geTaskSections: GeTaskSectionMeta[] = [
   {

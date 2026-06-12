@@ -413,7 +413,7 @@ onBeforeUnmount(() => {
         <RouterLink to="/tasks">
           <el-button plain>
             <el-icon><Reading /></el-icon>
-            <span>Все задачи GE-main</span>
+            <span>Мои задачи</span>
           </el-button>
         </RouterLink>
         <RouterLink to="/practice">
@@ -488,7 +488,7 @@ onBeforeUnmount(() => {
             <div class="feature-card__body">
               <div>
                 <h2>Можно сразу вернуться к подготовке</h2>
-                <p>Запустите общий тест, зайдите в вопросы по двум PDF или откройте задачи GE-main для практики.</p>
+                <p>Запустите общий тест, зайдите в вопросы по двум PDF или откройте задачи из Word для практики.</p>
               </div>
             </div>
 

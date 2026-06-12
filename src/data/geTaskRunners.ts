@@ -3,6 +3,7 @@ import {
   clusterizationSetupCode,
   largeFileSetupCode,
 } from '@/data/gePythonSetups'
+import type { GeSqlScenarioId } from '@/data/geSqlScenarios'
 
 type BaseRunner = {
   starterCode?: string
@@ -18,7 +19,7 @@ export type PythonTaskRunner = BaseRunner & {
 
 export type SqlTaskRunner = BaseRunner & {
   language: 'sql'
-  scenarioId: 'giaAirport'
+  scenarioId: GeSqlScenarioId
 }
 
 export type HtmlTaskRunner = BaseRunner & {
