@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import { EditPen, House } from '@element-plus/icons-vue'
 import { RouterLink } from 'vue-router'
 
@@ -101,6 +102,7 @@ const stdinDrafts = reactive<Record<string, string>>({})
 const activeTaskPanels = reactive<Record<string, TaskPanelId>>({})
 const runStates = reactive<Record<string, RunState | undefined>>({})
 const runningTaskId = ref('')
+const editorTextareas = new Map<string, HTMLTextAreaElement>()
 const selectedSectionId = ref(examSections[0]?.id ?? '')
 const activeSection = computed(() => {
   return taskCatalog.sections.find((section) => section.id === selectedSectionId.value) ?? taskCatalog.sections[0]
@@ -221,6 +223,39 @@ function restoreEditorSelection(textarea: HTMLTextAreaElement, start: number, en
   })
 }
 
+function resizeTextarea(textarea: HTMLTextAreaElement) {
+  textarea.style.height = '0px'
+  textarea.style.height = `${textarea.scrollHeight}px`
+}
+
+function setEditorTextarea(taskId: string, textarea: Element | ComponentPublicInstance | null) {
+  if (!(textarea instanceof HTMLTextAreaElement)) {
+    editorTextareas.delete(taskId)
+    return
+  }
+
+  editorTextareas.set(taskId, textarea)
+  resizeTextarea(textarea)
+}
+
+function queueEditorResize(taskId: string) {
+  void nextTick(() => {
+    const textarea = editorTextareas.get(taskId)
+
+    if (textarea) {
+      resizeTextarea(textarea)
+    }
+  })
+}
+
+function handleCodeInput(taskId: string, event: Event) {
+  persistCode(taskId)
+
+  if (event.target instanceof HTMLTextAreaElement) {
+    resizeTextarea(event.target)
+  }
+}
+
 function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
   const textarea = event.target instanceof HTMLTextAreaElement ? event.target : null
 
@@ -245,6 +280,7 @@ function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
 
     codeDrafts[taskId] = nextValue
     persistCode(taskId)
+    resizeTextarea(textarea)
     restoreEditorSelection(textarea, nextCaret, nextCaret)
     return
   }
@@ -287,6 +323,7 @@ function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
 
     codeDrafts[taskId] = nextValue
     persistCode(taskId)
+    resizeTextarea(textarea)
     restoreEditorSelection(textarea, nextStart, nextEnd)
     return
   }
@@ -297,6 +334,7 @@ function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
 
     codeDrafts[taskId] = nextValue
     persistCode(taskId)
+    resizeTextarea(textarea)
     restoreEditorSelection(textarea, nextCaret, nextCaret)
     return
   }
@@ -310,6 +348,7 @@ function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
 
   codeDrafts[taskId] = nextValue
   persistCode(taskId)
+  resizeTextarea(textarea)
   restoreEditorSelection(textarea, nextStart, nextEnd)
 }
 
@@ -330,6 +369,7 @@ function buildPythonExampleBlock(task: ViewTask) {
 function fillWithSolution(task: ViewTask) {
   codeDrafts[task.id] = getPythonRunner(task)?.sampleCode ? buildPythonExampleBlock(task) : task.solution
   persistCode(task.id)
+  queueEditorResize(task.id)
 }
 
 function resetDraft(task: ViewTask) {
@@ -338,6 +378,7 @@ function resetDraft(task: ViewTask) {
   persistCode(task.id)
   persistInput(task.id)
   runStates[task.id] = undefined
+  queueEditorResize(task.id)
 }
 
 function normalizeOutput(value: string) {
@@ -386,10 +427,8 @@ function buildPythonExecutionCode(task: ViewTask) {
   return `${currentCode.trimEnd()}\n\n${runner?.sampleCode ?? ''}`
 }
 
-function editorAutosize(task: ViewTask) {
-  return {
-    minRows: task.runner?.language === 'html' ? 14 : 9,
-  }
+function editorRows(task: ViewTask) {
+  return task.runner?.language === 'html' ? 14 : 9
 }
 
 function getSqlRunner(task: ViewTask) {
@@ -729,13 +768,16 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                   </div>
                 </div>
 
-                <el-input
+                <textarea
+                  :ref="(element) => setEditorTextarea(task.id, element)"
                   v-model="codeDrafts[task.id]"
-                  type="textarea"
-                  :autosize="editorAutosize(task)"
-                  resize="none"
+                  :rows="editorRows(task)"
                   class="task-editor"
-                  @update:model-value="persistCode(task.id)"
+                  spellcheck="false"
+                  autocapitalize="off"
+                  autocomplete="off"
+                  autocorrect="off"
+                  @input="handleCodeInput(task.id, $event)"
                   @keydown="handleEditorKeydown(task.id, $event)"
                 />
               </div>
@@ -1058,10 +1100,27 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   flex-wrap: wrap;
 }
 
-.task-editor :deep(textarea) {
+.task-editor {
+  width: 100%;
+  display: block;
+  padding: 16px 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(20, 35, 61, 0.9);
+  color: var(--app-text-strong);
   font-family: 'Fira Code', 'JetBrains Mono', monospace;
   font-size: 13px;
   line-height: 1.6;
+  overflow-y: hidden;
+  overflow-x: auto;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.task-editor:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 1px rgba(72, 116, 255, 0.28);
 }
 
 .task-preview {
