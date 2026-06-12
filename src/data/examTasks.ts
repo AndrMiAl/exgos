@@ -1,4 +1,5 @@
 import type { GeTaskRunner } from '@/data/geTaskRunners'
+import { getExamPythonSample } from '@/data/examPythonSamples'
 
 import algorithmsWordTasks from '../../ready_solutions/by_task_word_style/ALGORITHMS.md?raw'
 import javaWordTasks from '../../ready_solutions/by_task_word_style/JAVA.md?raw'
@@ -29,7 +30,7 @@ export type ExamTaskSectionMeta = {
 const pythonStarter = '# Напиши решение здесь\n'
 
 const pythonRunnerNote =
-  'Код запускается прямо в браузере. Если задача оформлена через функции или классы, добавь вызов внизу файла, чтобы увидеть результат.'
+  'Код запускается прямо в браузере. Для этих задач есть готовый пример запуска: кнопка "Проверить вывод" сравнивает результат с эталоном, а "Запустить код" показывает фактический вывод.'
 
 const examSqlStarter = `-- Напиши SQL-запрос здесь
 -- Доступны таблицы:
@@ -44,11 +45,15 @@ SELECT *
 FROM client;
 `
 
-function buildPythonRunner(): GeTaskRunner {
+function buildPythonRunner(sectionId: string, taskNumber: number): GeTaskRunner {
+  const sample = getExamPythonSample(sectionId, taskNumber)
+
   return {
     language: 'python',
     note: pythonRunnerNote,
     starterCode: pythonStarter,
+    sampleCode: sample?.sampleCode,
+    expectedStdout: sample?.expectedStdout,
   }
 }
 
@@ -141,13 +146,17 @@ export const examTaskSections: ExamTaskSectionMeta[] = [
     id: 'python',
     title: 'Python',
     description: 'Задачи из Word по Python. Внутри условия и готовые решения по номерам.',
-    tasks: parseWordTasks(pythonWordTasks, 'python', 'python', buildPythonRunner),
+    tasks: parseWordTasks(pythonWordTasks, 'python', 'python', (_solution, taskNumber) =>
+      buildPythonRunner('python', taskNumber),
+    ),
   },
   {
     id: 'algorithms',
     title: 'Алгоритмы',
     description: 'Задачи из Word по алгоритмам. Можно открыть решение и запускать Python-код в браузере.',
-    tasks: parseWordTasks(algorithmsWordTasks, 'algorithms', 'python', buildPythonRunner),
+    tasks: parseWordTasks(algorithmsWordTasks, 'algorithms', 'python', (_solution, taskNumber) =>
+      buildPythonRunner('algorithms', taskNumber),
+    ),
   },
   {
     id: 'sql',

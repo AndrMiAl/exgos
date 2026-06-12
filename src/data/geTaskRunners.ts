@@ -15,6 +15,7 @@ export type PythonTaskRunner = BaseRunner & {
   stdin?: string
   expectedStdout?: string
   setupCode?: string
+  sampleCode?: string
 }
 
 export type SqlTaskRunner = BaseRunner & {

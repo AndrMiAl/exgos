@@ -317,8 +317,18 @@ function resolveStarterCode(task: ViewTask) {
   return task.runner?.starterCode ?? ''
 }
 
+function buildPythonExampleBlock(task: ViewTask) {
+  const runner = getPythonRunner(task)
+
+  if (!runner?.sampleCode) {
+    return ''
+  }
+
+  return `${task.solution.trimEnd()}\n\n${runner.sampleCode}`
+}
+
 function fillWithSolution(task: ViewTask) {
-  codeDrafts[task.id] = task.solution
+  codeDrafts[task.id] = getPythonRunner(task)?.sampleCode ? buildPythonExampleBlock(task) : task.solution
   persistCode(task.id)
 }
 
@@ -334,20 +344,52 @@ function normalizeOutput(value: string) {
   return value.replace(/\r\n/g, '\n').trim()
 }
 
-function buildPythonRunMessage(stdout: string, stderr: string) {
+function buildPythonRunMessage(task: ViewTask, stdout: string, stderr: string) {
   if (stderr) {
     return 'Код выполнился с ошибкой. Посмотри traceback ниже.'
   }
 
   if (stdout) {
-    return 'Код выполнился. Ниже показан фактический вывод программы.'
+    return getPythonRunner(task)?.sampleCode
+      ? 'Код выполнился. Ниже показан фактический вывод на встроенном примере запуска.'
+      : 'Код выполнился. Ниже показан фактический вывод программы.'
   }
 
-  return 'Код выполнился, но программа ничего не вывела.'
+  return getPythonRunner(task)?.sampleCode
+    ? 'Код выполнился, но ничего не вывел. Нажми "Подставить решение" или добавь вызов из блока "Пример запуска".'
+    : 'Код выполнился, но программа ничего не вывела.'
 }
 
 function getPythonRunner(task: ViewTask) {
   return task.runner?.language === 'python' ? task.runner : undefined
+}
+
+function pythonExampleCode(task: ViewTask) {
+  return getPythonRunner(task)?.sampleCode ?? ''
+}
+
+function buildPythonExecutionCode(task: ViewTask) {
+  const runner = getPythonRunner(task)
+  const currentCode = codeDrafts[task.id] ?? ''
+  const trimmedCode = currentCode.trim()
+  const sampleCode = runner?.sampleCode?.trim()
+  const starterCode = runner?.starterCode?.trim() ?? ''
+
+  if (!sampleCode || !trimmedCode || trimmedCode === starterCode) {
+    return currentCode
+  }
+
+  if (currentCode.includes(sampleCode)) {
+    return currentCode
+  }
+
+  return `${currentCode.trimEnd()}\n\n${runner?.sampleCode ?? ''}`
+}
+
+function editorAutosize(task: ViewTask) {
+  return {
+    minRows: task.runner?.language === 'html' ? 14 : 9,
+  }
 }
 
 function getSqlRunner(task: ViewTask) {
@@ -360,6 +402,14 @@ function getHtmlRunner(task: ViewTask) {
 
 function hasCheck(task: ViewTask) {
   return task.runner?.language === 'sql' || (task.runner?.language === 'python' && Boolean(task.runner.expectedStdout))
+}
+
+function checkButtonLabel(task: ViewTask) {
+  if (getPythonRunner(task)?.expectedStdout) {
+    return 'Проверить вывод'
+  }
+
+  return 'Проверить'
 }
 
 function runnerBadge(task: ViewTask) {
@@ -459,7 +509,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
       message: 'Если Python запускается впервые, браузер может подгружать интерпретатор несколько секунд.',
     }
 
-    const result = await runPythonCode(codeDrafts[task.id] ?? '', {
+    const result = await runPythonCode(buildPythonExecutionCode(task), {
       stdin: stdinDrafts[task.id] ?? '',
       setupCode: runner.setupCode,
     })
@@ -486,7 +536,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
     runStates[task.id] = {
       tone: result.status === 'ok' ? 'success' : 'error',
       title: result.status === 'ok' ? 'Код запущен' : 'Ошибка выполнения',
-      message: buildPythonRunMessage(result.stdout, result.stderr),
+      message: buildPythonRunMessage(task, result.stdout, result.stderr),
       stdout: result.stdout,
       stderr: result.stderr,
     }
@@ -649,6 +699,14 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 </ul>
               </div>
 
+              <div v-if="pythonExampleCode(task)" class="task-card__block">
+                <h3>Пример запуска</h3>
+                <p class="muted">
+                  Этот блок автоматически добавляется при проверке, если ты не вставил его в редактор сам.
+                </p>
+                <pre class="task-code"><code>{{ pythonExampleCode(task) }}</code></pre>
+              </div>
+
               <div class="task-card__block">
                 <div class="task-editor__header">
                   <h3 v-if="getSqlRunner(task)">Твой SQL</h3>
@@ -666,7 +724,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                       :loading="runningTaskId === task.id"
                       @click="executeTask(task, 'check')"
                     >
-                      Проверить
+                      {{ checkButtonLabel(task) }}
                     </el-button>
                   </div>
                 </div>
@@ -674,8 +732,8 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 <el-input
                   v-model="codeDrafts[task.id]"
                   type="textarea"
-                  :rows="task.runner.language === 'html' ? 14 : 9"
-                  resize="vertical"
+                  :autosize="editorAutosize(task)"
+                  resize="none"
                   class="task-editor"
                   @update:model-value="persistCode(task.id)"
                   @keydown="handleEditorKeydown(task.id, $event)"
@@ -687,8 +745,8 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 <el-input
                   v-model="stdinDrafts[task.id]"
                   type="textarea"
-                  :rows="3"
-                  resize="vertical"
+                  :autosize="{ minRows: 3 }"
+                  resize="none"
                   @update:model-value="persistInput(task.id)"
                 />
               </div>
