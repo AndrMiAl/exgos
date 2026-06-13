@@ -619,6 +619,20 @@ function sqlReferenceDescription(task: ViewTask) {
   return `Для этой задачи доступны таблицы: ${relevantTables.join(', ')}.`
 }
 
+function sqlBrowserDatabaseName(task: ViewTask) {
+  const runner = getSqlRunner(task)
+  return runner?.scenarioId === 'examRental' ? 'exam_rental' : runner?.scenarioId ?? 'exam_db'
+}
+
+function sqlBrowserTableRows(task: ViewTask, tableName: string) {
+  return sqlScenario(task)?.tables[tableName]?.length ?? 0
+}
+
+function sqlBrowserTableColumns(task: ViewTask, tableName: string) {
+  const firstRow = sqlScenario(task)?.tables[tableName]?.[0]
+  return firstRow ? Object.keys(firstRow).length : 0
+}
+
 function formatSqlPreviewCell(value: unknown): string | number | null {
   if (value instanceof Date) {
     return value.toISOString().slice(0, 10)
@@ -910,7 +924,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
               <el-radio-button
                 v-for="option in panelOptions(task)"
                 :key="`${task.id}-${option.value}`"
-                :label="option.value"
+                :value="option.value"
               >
                 {{ option.label }}
               </el-radio-button>
@@ -969,57 +983,82 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 
               <div class="task-card__block" :class="{ 'task-card__block--sql-editor': Boolean(getSqlRunner(task)) }">
                 <div v-if="getSqlRunner(task)" class="sql-browser">
-                  <div class="sql-browser__intro">
-                    <h3>Данные для задачи</h3>
-                    <p class="muted">Открывай нужную таблицу и сразу смотри строки.</p>
-                  </div>
-
-                  <div class="sql-browser__list">
-                    <button
-                      v-for="tableName in sqlRelevantTableNames(task)"
-                      :key="`${task.id}-${tableName}`"
-                      type="button"
-                      class="sql-browser__button"
-                      :class="{ 'is-active': currentSqlBrowserTableName(task) === tableName }"
-                      @click="setSqlBrowserTable(task.id, tableName)"
-                    >
-                      {{ tableName }}
-                    </button>
-                  </div>
-
-                  <div v-if="sqlBrowserPreview(task)" class="sql-browser__viewer">
-                    <div class="sql-browser__viewer-header">
-                      <div>
-                        <h4>{{ sqlBrowserPreview(task)?.name }}</h4>
-                        <p class="sql-browser__schema">{{ sqlBrowserPreview(task)?.schema }}</p>
-                      </div>
-                      <div class="sql-browser__stats">
-                        <el-tag effect="plain" type="success">{{ formatRowsLabel(sqlBrowserPreview(task)?.totalRows ?? 0) }}</el-tag>
-                        <el-tag effect="plain">{{ formatFieldsLabel(sqlBrowserPreview(task)?.columns.length ?? 0) }}</el-tag>
-                      </div>
+                  <div class="sql-browser__topbar">
+                    <div class="sql-browser__instance">
+                      <span class="sql-browser__instance-label">DB</span>
+                      <strong>{{ sqlBrowserDatabaseName(task) }}</strong>
+                      <span class="sql-browser__schema-badge">public</span>
                     </div>
+                    <p class="sql-browser__hint">Нужные таблицы для этой задачи</p>
+                  </div>
 
-                    <div class="table-shell sql-browser__table-shell">
-                      <table class="task-table">
-                        <thead>
-                          <tr>
-                            <th v-for="column in sqlBrowserPreview(task)?.columns ?? []" :key="column">{{ column }}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr v-if="(sqlBrowserPreview(task)?.rows.length ?? 0) === 0">
-                            <td :colspan="sqlBrowserPreview(task)?.columns.length || 1">В таблице нет строк</td>
-                          </tr>
-                          <tr
-                            v-for="(row, rowIndex) in sqlBrowserPreview(task)?.rows ?? []"
-                            :key="`${task.id}-browser-row-${rowIndex}`"
-                          >
-                            <td v-for="(cell, cellIndex) in row" :key="`${task.id}-browser-cell-${rowIndex}-${cellIndex}`">
-                              {{ cell }}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
+                  <div class="sql-browser__workspace">
+                    <aside class="sql-browser__sidebar">
+                      <div class="sql-browser__sidebar-header">
+                        <p class="sql-browser__sidebar-label">Schema</p>
+                        <h3>public</h3>
+                      </div>
+
+                      <div class="sql-browser__list">
+                        <button
+                          v-for="tableName in sqlRelevantTableNames(task)"
+                          :key="`${task.id}-${tableName}`"
+                          type="button"
+                          class="sql-browser__button"
+                          :class="{ 'is-active': currentSqlBrowserTableName(task) === tableName }"
+                          @click="setSqlBrowserTable(task.id, tableName)"
+                        >
+                          <span class="sql-browser__button-main">{{ tableName }}</span>
+                          <span class="sql-browser__button-meta">
+                            {{ sqlBrowserTableRows(task, tableName) }} стр. · {{ sqlBrowserTableColumns(task, tableName) }} пол.
+                          </span>
+                        </button>
+                      </div>
+                    </aside>
+
+                    <div v-if="sqlBrowserPreview(task)" class="sql-browser__viewer">
+                      <div class="sql-browser__viewer-header">
+                        <div>
+                          <p class="sql-browser__viewer-path">public.{{ sqlBrowserPreview(task)?.name }}</p>
+                          <h4>{{ sqlBrowserPreview(task)?.name }}</h4>
+                        </div>
+                        <div class="sql-browser__stats">
+                          <el-tag effect="plain" type="success">{{ formatRowsLabel(sqlBrowserPreview(task)?.totalRows ?? 0) }}</el-tag>
+                          <el-tag effect="plain">{{ formatFieldsLabel(sqlBrowserPreview(task)?.columns.length ?? 0) }}</el-tag>
+                        </div>
+                      </div>
+
+                      <p class="sql-browser__query">SELECT * FROM public.{{ sqlBrowserPreview(task)?.name }}</p>
+                      <p class="sql-browser__schema">{{ sqlBrowserPreview(task)?.schema }}</p>
+
+                      <div class="sql-browser__columns">
+                        <span v-for="column in sqlBrowserPreview(task)?.columns ?? []" :key="column" class="sql-browser__column-chip">
+                          {{ column }}
+                        </span>
+                      </div>
+
+                      <div class="table-shell sql-browser__table-shell">
+                        <table class="task-table">
+                          <thead>
+                            <tr>
+                              <th v-for="column in sqlBrowserPreview(task)?.columns ?? []" :key="column">{{ column }}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-if="(sqlBrowserPreview(task)?.rows.length ?? 0) === 0">
+                              <td :colspan="sqlBrowserPreview(task)?.columns.length || 1">В таблице нет строк</td>
+                            </tr>
+                            <tr
+                              v-for="(row, rowIndex) in sqlBrowserPreview(task)?.rows ?? []"
+                              :key="`${task.id}-browser-row-${rowIndex}`"
+                            >
+                              <td v-for="(cell, cellIndex) in row" :key="`${task.id}-browser-cell-${rowIndex}-${cellIndex}`">
+                                {{ cell }}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1404,55 +1443,170 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 }
 
 .task-card__block--sql-editor {
-  position: relative;
-  min-height: 420px;
-  padding-left: 336px;
+  display: grid;
+  grid-template-columns: minmax(360px, 396px) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px 22px;
 }
 
 .sql-browser {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 308px;
   display: grid;
-  gap: 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: rgba(72, 116, 255, 0.05);
-  padding: 14px;
+  gap: 0;
+  border: 1px solid rgba(154, 169, 196, 0.2);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(34, 42, 58, 0.96) 0%, rgba(24, 30, 43, 0.98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 36px rgba(4, 8, 18, 0.28);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
-.sql-browser__intro h3,
+.sql-browser__topbar {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(154, 169, 196, 0.16);
+  background: linear-gradient(180deg, rgba(54, 62, 80, 0.96) 0%, rgba(39, 46, 61, 0.98) 100%);
+}
+
+.sql-browser__instance {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #eef3ff;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sql-browser__instance strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sql-browser__instance-label,
+.sql-browser__schema-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sql-browser__instance-label {
+  background: rgba(64, 164, 255, 0.2);
+  color: #8fd0ff;
+}
+
+.sql-browser__schema-badge {
+  margin-left: auto;
+  background: rgba(152, 168, 192, 0.16);
+  color: #d0d9e8;
+}
+
+.sql-browser__hint {
+  margin: 0;
+  color: rgba(214, 222, 236, 0.76);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sql-browser__workspace {
+  display: grid;
+  grid-template-columns: minmax(132px, 148px) minmax(0, 1fr);
+  min-height: 352px;
+}
+
+.sql-browser__sidebar {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px 12px;
+  border-right: 1px solid rgba(154, 169, 196, 0.14);
+  background: rgba(17, 23, 34, 0.72);
+}
+
+.sql-browser__sidebar-header {
+  display: grid;
+  gap: 4px;
+}
+
+.sql-browser__sidebar-header h3,
 .sql-browser__viewer-header h4 {
-  margin: 0 0 8px;
+  margin: 0;
+}
+
+.sql-browser__sidebar-label {
+  margin: 0;
+  color: rgba(198, 209, 227, 0.64);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .sql-browser__list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
 }
 
 .sql-browser__button {
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: rgba(12, 19, 34, 0.7);
-  color: var(--app-text-strong);
-  padding: 8px 12px;
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(154, 169, 196, 0.14);
+  border-radius: 10px;
+  background: rgba(36, 45, 61, 0.52);
+  color: #edf2fb;
+  padding: 10px 11px;
   font: inherit;
-  font-size: 13px;
+  text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.sql-browser__button:hover {
+  border-color: rgba(115, 176, 255, 0.36);
+  background: rgba(48, 61, 83, 0.78);
+  transform: translateY(-1px);
 }
 
 .sql-browser__button.is-active {
-  border-color: rgba(72, 116, 255, 0.55);
-  background: rgba(72, 116, 255, 0.18);
+  border-color: rgba(96, 179, 255, 0.56);
+  background: linear-gradient(180deg, rgba(41, 91, 150, 0.74) 0%, rgba(31, 58, 104, 0.88) 100%);
+  box-shadow: inset 0 0 0 1px rgba(176, 222, 255, 0.12);
+}
+
+.sql-browser__button-main {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.sql-browser__button-meta {
+  color: rgba(213, 222, 235, 0.72);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .sql-browser__viewer {
   display: grid;
-  gap: 10px;
+  align-content: start;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  min-width: 0;
+  background: rgba(9, 13, 22, 0.22);
 }
 
 .sql-browser__viewer-header {
@@ -1462,11 +1616,51 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   gap: 12px;
 }
 
-.sql-browser__schema {
+.sql-browser__viewer-path {
+  margin: 0 0 4px;
+  color: rgba(150, 214, 255, 0.84);
+  font-size: 12px;
+  line-height: 1.4;
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+}
+
+.sql-browser__query {
   margin: 0;
-  color: var(--app-muted);
+  padding: 9px 11px;
+  border: 1px solid rgba(154, 169, 196, 0.12);
+  border-radius: 10px;
+  background: rgba(12, 16, 26, 0.84);
+  color: #e5edf8;
   font-size: 12px;
   line-height: 1.5;
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  overflow-x: auto;
+}
+
+.sql-browser__schema {
+  margin: 0;
+  color: rgba(197, 207, 221, 0.72);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sql-browser__columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sql-browser__column-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(128, 169, 218, 0.24);
+  border-radius: 999px;
+  background: rgba(29, 45, 67, 0.62);
+  color: #d7e7ff;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .sql-browser__stats {
@@ -1477,8 +1671,15 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 }
 
 .sql-browser__table-shell {
-  max-height: 340px;
+  max-height: 286px;
   overflow: auto;
+  border-color: rgba(154, 169, 196, 0.14);
+  background: rgba(7, 11, 18, 0.5);
+}
+
+.task-card__block--sql-editor .task-editor__header,
+.task-card__block--sql-editor .task-editor {
+  grid-column: 2;
 }
 
 .task-table__header {
@@ -1609,14 +1810,25 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   }
 
   .task-card__block--sql-editor {
-    min-height: auto;
-    padding-left: 0;
+    grid-template-columns: 1fr;
   }
 
   .sql-browser {
-    position: static;
     width: 100%;
-    margin-bottom: 14px;
+  }
+
+  .sql-browser__workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sql-browser__sidebar {
+    border-right: 0;
+    border-bottom: 1px solid rgba(154, 169, 196, 0.14);
+  }
+
+  .task-card__block--sql-editor .task-editor__header,
+  .task-card__block--sql-editor .task-editor {
+    grid-column: auto;
   }
 
   .task-editor__actions {
