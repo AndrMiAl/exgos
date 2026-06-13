@@ -1444,9 +1444,9 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 
 .task-card__block--sql-editor {
   display: grid;
-  grid-template-columns: minmax(360px, 396px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 18px 22px;
+  gap: 18px;
 }
 
 .sql-browser {
@@ -1461,6 +1461,10 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
     0 16px 36px rgba(4, 8, 18, 0.28);
   box-sizing: border-box;
   overflow: hidden;
+}
+
+.task-card__block--sql-editor .sql-browser {
+  width: 100%;
 }
 
 .sql-browser__topbar {
@@ -1677,9 +1681,14 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   background: rgba(7, 11, 18, 0.5);
 }
 
-.task-card__block--sql-editor .task-editor__header,
+.task-card__block--sql-editor .task-editor__header {
+  width: 100%;
+  margin-top: 2px;
+}
+
 .task-card__block--sql-editor .task-editor {
-  grid-column: 2;
+  width: 100%;
+  min-height: 360px;
 }
 
 .task-table__header {
@@ -1810,7 +1819,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   }
 
   .task-card__block--sql-editor {
-    grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .sql-browser {
@@ -1824,11 +1833,6 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   .sql-browser__sidebar {
     border-right: 0;
     border-bottom: 1px solid rgba(154, 169, 196, 0.14);
-  }
-
-  .task-card__block--sql-editor .task-editor__header,
-  .task-card__block--sql-editor .task-editor {
-    grid-column: auto;
   }
 
   .task-editor__actions {
