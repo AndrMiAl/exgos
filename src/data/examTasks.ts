@@ -45,6 +45,34 @@ SELECT *
 FROM client;
 `
 
+const allExamSqlTables = ['client', 'rental', 'vehicle', 'carmodel', 'manufacturer', 'supplier'] as const
+
+const examSqlFocusTables: Record<number, string[]> = {
+  1: ['client', 'rental', 'vehicle', 'carmodel', 'supplier'],
+  2: ['rental', 'client', 'vehicle', 'carmodel'],
+  3: ['rental'],
+  4: ['client', 'rental', 'vehicle', 'carmodel', 'manufacturer'],
+  5: ['supplier', 'carmodel', 'vehicle', 'rental'],
+  6: ['client', 'rental'],
+  7: ['vehicle', 'carmodel', 'rental'],
+  8: ['carmodel', 'vehicle', 'rental', 'client'],
+  9: ['manufacturer', 'carmodel'],
+  10: ['client', 'rental', 'vehicle', 'carmodel'],
+}
+
+function buildExamSqlStarter(focusTables: string[]) {
+  const availableTables = focusTables.length > 0 ? focusTables : [...allExamSqlTables]
+  const firstTable = availableTables[0] ?? 'client'
+
+  return `-- Напиши SQL-запрос здесь
+-- Таблицы для этой задачи:
+${availableTables.map((tableName) => `-- ${tableName}`).join('\n')}
+
+SELECT *
+FROM ${firstTable};
+`
+}
+
 function buildPythonRunner(sectionId: string, taskNumber: number): GeTaskRunner {
   const sample = getExamPythonSample(sectionId, taskNumber)
 
@@ -62,7 +90,21 @@ function buildSqlRunner(): GeTaskRunner {
     language: 'sql',
     scenarioId: 'examRental',
     starterCode: examSqlStarter,
-    note: 'Запрос выполняется на учебной базе проката автомобилей из заданий по SQL.',
+    note: 'Запрос выполняется на учебной базе проката автомобилей из заданий по SQL. Можно писать несколько SELECT подряд: они выполнятся по порядку.',
+  }
+}
+
+void buildSqlRunner
+
+function buildExamTaskSqlRunner(_solution: string, taskNumber: number): GeTaskRunner {
+  const focusTables = examSqlFocusTables[taskNumber] ?? [...allExamSqlTables]
+
+  return {
+    language: 'sql',
+    scenarioId: 'examRental',
+    starterCode: buildExamSqlStarter(focusTables),
+    note: 'Запрос выполняется на учебной базе проката автомобилей из заданий по SQL. Слева можно открыть только нужные таблицы для этой задачи.',
+    focusTables,
   }
 }
 
@@ -162,7 +204,7 @@ export const examTaskSections: ExamTaskSectionMeta[] = [
     id: 'sql',
     title: 'SQL',
     description: 'SQL-задачи из Word на базе проката автомобилей с живым выполнением запросов.',
-    tasks: parseWordTasks(sqlWordTasks, 'sql', 'sql', buildSqlRunner),
+    tasks: parseWordTasks(sqlWordTasks, 'sql', 'sql', buildExamTaskSqlRunner),
   },
   {
     id: 'ml',

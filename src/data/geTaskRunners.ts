@@ -21,6 +21,7 @@ export type PythonTaskRunner = BaseRunner & {
 export type SqlTaskRunner = BaseRunner & {
   language: 'sql'
   scenarioId: GeSqlScenarioId
+  focusTables?: string[]
 }
 
 export type HtmlTaskRunner = BaseRunner & {

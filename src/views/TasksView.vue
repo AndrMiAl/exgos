@@ -9,10 +9,24 @@ import { geSqlScenarios } from '@/data/geSqlScenarios'
 import type { GeTaskRunner } from '@/data/geTaskRunners'
 import { runPythonCode } from '@/utils/pythonRunner'
 import { compareSqlResults, runSqlQuery } from '@/utils/sqlRunner'
+import type { SqlRunResult } from '@/utils/sqlRunner'
 
 type TaskCatalogId = 'exam'
 type TaskPanelId = 'solution' | 'editor'
 type TableRows = Array<Array<string | number | null>>
+type SqlTableView = {
+  title: string
+  columns: string[]
+  rows: TableRows
+}
+
+type SqlBrowserPreview = {
+  name: string
+  schema: string
+  columns: string[]
+  rows: TableRows
+  totalRows: number
+}
 
 type ViewTask = {
   id: string
@@ -56,11 +70,11 @@ type RunState = {
   stdout?: string
   stderr?: string
   expectedText?: string
-  columns?: string[]
-  rows?: TableRows
-  expectedColumns?: string[]
-  expectedRows?: TableRows
+  actualTables?: SqlTableView[]
+  expectedTables?: SqlTableView[]
   htmlPreview?: string
+  solutionPreview?: string
+  solutionFull?: string
 }
 
 const examSections: ViewSection[] = examTaskSections.map((section) => ({
@@ -101,6 +115,8 @@ const codeDrafts = reactive<Record<string, string>>({})
 const stdinDrafts = reactive<Record<string, string>>({})
 const activeTaskPanels = reactive<Record<string, TaskPanelId>>({})
 const runStates = reactive<Record<string, RunState | undefined>>({})
+const expandedResultSolutions = reactive<Record<string, boolean>>({})
+const selectedSqlBrowserTables = reactive<Record<string, string>>({})
 const runningTaskId = ref('')
 const editorTextareas = new Map<string, HTMLTextAreaElement>()
 const selectedSectionId = ref(examSections[0]?.id ?? '')
@@ -132,6 +148,10 @@ for (const task of allTasks) {
   codeDrafts[task.id] = readStoredCodeValue(task)
   stdinDrafts[task.id] = readStoredValue(getInputKey(task.id), getPythonRunner(task)?.stdin ?? '')
   activeTaskPanels[task.id] = task.runner ? 'editor' : 'solution'
+
+  if (task.runner?.language === 'sql') {
+    selectedSqlBrowserTables[task.id] = task.runner.focusTables?.[0] ?? ''
+  }
 }
 
 function handleSectionSelect(sectionId: string | number) {
@@ -378,11 +398,51 @@ function resetDraft(task: ViewTask) {
   persistCode(task.id)
   persistInput(task.id)
   runStates[task.id] = undefined
+  expandedResultSolutions[task.id] = false
   queueEditorResize(task.id)
 }
 
 function normalizeOutput(value: string) {
   return value.replace(/\r\n/g, '\n').trim()
+}
+
+function buildSolutionPreview(solution: string) {
+  const normalizedSolution = solution.trimEnd()
+  const lines = normalizedSolution.split('\n')
+  const previewLines = 8
+  const previewChars = 420
+
+  if (lines.length <= previewLines && normalizedSolution.length <= previewChars) {
+    return normalizedSolution
+  }
+
+  const cutByLines = lines.slice(0, previewLines).join('\n')
+  const preview = cutByLines.length > previewChars ? cutByLines.slice(0, previewChars).trimEnd() : cutByLines
+  return `${preview}\n...`
+}
+
+function shouldShowFullSolutionButton(state: RunState | undefined) {
+  return Boolean(state?.solutionPreview && state?.solutionFull && state.solutionPreview !== state.solutionFull)
+}
+
+function solutionTextForResult(taskId: string, state: RunState | undefined) {
+  if (!state) {
+    return ''
+  }
+
+  return expandedResultSolutions[taskId] ? state.solutionFull ?? '' : state.solutionPreview ?? ''
+}
+
+function solutionHeadingForResult(taskId: string, state: RunState | undefined) {
+  if (!shouldShowFullSolutionButton(state)) {
+    return 'Эталонное решение'
+  }
+
+  return expandedResultSolutions[taskId] ? 'Эталонное решение' : 'Фрагмент решения'
+}
+
+function toggleResultSolution(taskId: string) {
+  expandedResultSolutions[taskId] = !expandedResultSolutions[taskId]
 }
 
 function buildPythonRunMessage(task: ViewTask, stdout: string, stderr: string) {
@@ -477,7 +537,7 @@ function runnerTitle(task: ViewTask) {
 
 function runnerDescription(task: ViewTask) {
   if (task.runner?.language === 'sql') {
-    return 'Запрос выполняется на учебной базе прямо в браузере.'
+    return 'Запрос выполняется на учебной базе прямо в браузере. Можно запускать несколько SELECT-запросов подряд.'
   }
 
   if (task.runner?.language === 'html') {
@@ -490,6 +550,150 @@ function runnerDescription(task: ViewTask) {
 function sqlScenario(task: ViewTask) {
   const runner = getSqlRunner(task)
   return runner ? geSqlScenarios[runner.scenarioId] : undefined
+}
+
+function extractSqlTableName(schemaLine: string) {
+  return schemaLine.split('(')[0]?.trim() ?? ''
+}
+
+function sqlRelevantTableNames(task: ViewTask) {
+  const scenario = sqlScenario(task)
+  const focusTables = getSqlRunner(task)?.focusTables
+
+  if (!scenario) {
+    return []
+  }
+
+  if (!focusTables || focusTables.length === 0) {
+    return scenario.schema.map(extractSqlTableName).filter(Boolean)
+  }
+
+  const allowed = new Set(focusTables)
+  return scenario.schema.map(extractSqlTableName).filter((tableName) => allowed.has(tableName))
+}
+
+function sqlRelevantSchemaLines(task: ViewTask) {
+  const relevantTables = new Set(sqlRelevantTableNames(task))
+  return sqlScenario(task)?.schema.filter((line) => relevantTables.has(extractSqlTableName(line))) ?? []
+}
+
+function formatCountWord(count: number, one: string, few: string, many: string) {
+  const mod100 = count % 100
+
+  if (mod100 >= 11 && mod100 <= 14) {
+    return many
+  }
+
+  const mod10 = count % 10
+
+  if (mod10 === 1) {
+    return one
+  }
+
+  if (mod10 >= 2 && mod10 <= 4) {
+    return few
+  }
+
+  return many
+}
+
+function formatRowsLabel(count: number) {
+  return `${count} ${formatCountWord(count, 'строка', 'строки', 'строк')}`
+}
+
+function formatFieldsLabel(count: number) {
+  return `${count} ${formatCountWord(count, 'поле', 'поля', 'полей')}`
+}
+
+function formatResultsLabel(count: number) {
+  return `${count} ${formatCountWord(count, 'результат', 'результата', 'результатов')}`
+}
+
+function sqlReferenceDescription(task: ViewTask) {
+  const relevantTables = sqlRelevantTableNames(task)
+
+  if (relevantTables.length === 0) {
+    return sqlScenario(task)?.description ?? ''
+  }
+
+  return `Для этой задачи доступны таблицы: ${relevantTables.join(', ')}.`
+}
+
+function formatSqlPreviewCell(value: unknown): string | number | null {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10)
+  }
+
+  if (typeof value === 'number' || typeof value === 'string' || value === null) {
+    return value
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0
+  }
+
+  if (value === undefined) {
+    return null
+  }
+
+  return String(value)
+}
+
+function currentSqlBrowserTableName(task: ViewTask) {
+  const relevantTables = sqlRelevantTableNames(task)
+  const selectedTable = selectedSqlBrowserTables[task.id]
+
+  if (selectedTable && relevantTables.includes(selectedTable)) {
+    return selectedTable
+  }
+
+  return relevantTables[0] ?? ''
+}
+
+function setSqlBrowserTable(taskId: string, tableName: string) {
+  selectedSqlBrowserTables[taskId] = tableName
+}
+
+function sqlBrowserPreview(task: ViewTask): SqlBrowserPreview | null {
+  const scenario = sqlScenario(task)
+  const tableName = currentSqlBrowserTableName(task)
+
+  if (!scenario || !tableName) {
+    return null
+  }
+
+  const schemaLine =
+    scenario.schema.find((line) => extractSqlTableName(line) === tableName) ?? `${tableName}(нет описания)`
+  const sourceRows = scenario.tables[tableName] ?? []
+  const columns = sourceRows[0] ? Object.keys(sourceRows[0]) : []
+
+  return {
+    name: tableName,
+    schema: schemaLine,
+    columns,
+    rows: sourceRows.map((row) => columns.map((column) => formatSqlPreviewCell(row[column]))),
+    totalRows: sourceRows.length,
+  }
+}
+
+function buildSqlTables(result: SqlRunResult, baseTitle: string) {
+  const tables = result.tables.length > 0 ? result.tables : [{ columns: result.columns, rows: result.rows }]
+
+  if (tables.length === 1) {
+    return [
+      {
+        title: baseTitle,
+        columns: tables[0].columns,
+        rows: tables[0].rows,
+      },
+    ]
+  }
+
+  return tables.map((table, index) => ({
+    title: `${baseTitle} ${index + 1}`,
+    columns: table.columns,
+    rows: table.rows,
+  }))
 }
 
 async function executeTask(task: ViewTask, mode: 'run' | 'check') {
@@ -515,15 +719,19 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
     if (runner.language === 'sql') {
       if (mode === 'check') {
         const checked = compareSqlResults(codeDrafts[task.id] ?? '', task.solution, runner.scenarioId)
+        expandedResultSolutions[task.id] = false
         runStates[task.id] = {
           tone: checked.isCorrect ? 'success' : 'warning',
           title: checked.isCorrect ? 'Верно' : 'Пока не совпало',
-          message: checked.message,
-          columns: checked.actual.columns,
-          rows: checked.actual.rows,
-          expectedColumns: checked.expected.columns,
-          expectedRows: checked.expected.rows,
+          message:
+            checked.actual.tables.length > 1
+              ? `${checked.message} Сравнение идёт по последнему SELECT, а ниже показаны все результаты по порядку.`
+              : checked.message,
+          actualTables: buildSqlTables(checked.actual, 'Фактический результат'),
+          expectedTables: buildSqlTables(checked.expected, 'Эталонный результат'),
           stderr: checked.actual.status === 'error' ? checked.actual.stderr : checked.expected.status === 'error' ? checked.expected.stderr : '',
+          solutionPreview: buildSolutionPreview(task.solution),
+          solutionFull: task.solution,
         }
       } else {
         const result = runSqlQuery(codeDrafts[task.id] ?? '', runner.scenarioId)
@@ -532,10 +740,11 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
           title: result.status === 'ok' ? 'SQL выполнен' : 'Ошибка SQL',
           message:
             result.status === 'ok'
-              ? 'Запрос выполнился на учебной базе. Ниже показан набор строк, который он вернул.'
+              ? result.tables.length > 1
+                ? `Все SELECT-запросы выполнились. Ниже показаны ${formatResultsLabel(result.tables.length)} по порядку.`
+                : 'Запрос выполнился на учебной базе. Ниже показан набор строк, который он вернул.'
               : 'Запрос не выполнился. Исправь синтаксис и попробуй снова.',
-          columns: result.columns,
-          rows: result.rows,
+          actualTables: buildSqlTables(result, 'Результат запроса'),
           stderr: result.stderr,
         }
       }
@@ -559,6 +768,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
     if (mode === 'check' && runner.expectedStdout) {
       const isCorrect = result.status === 'ok' && normalizedStdout === expectedOutput
 
+      expandedResultSolutions[task.id] = false
       runStates[task.id] = {
         tone: isCorrect ? 'success' : 'warning',
         title: isCorrect ? 'Верно' : 'Пока не совпало',
@@ -568,6 +778,8 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
         stdout: result.stdout,
         stderr: result.stderr,
         expectedText: runner.expectedStdout,
+        solutionPreview: buildSolutionPreview(task.solution),
+        solutionFull: task.solution,
       }
       return
     }
@@ -729,10 +941,19 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
               </div>
 
               <div v-if="getSqlRunner(task) && sqlScenario(task)" class="task-card__block">
-                <h3>{{ sqlScenario(task)?.title }}</h3>
-                <p class="muted">{{ sqlScenario(task)?.description }}</p>
+                <div class="sql-reference__header">
+                  <div>
+                    <h3>{{ sqlScenario(task)?.title }}</h3>
+                    <p class="muted">{{ sqlReferenceDescription(task) }}</p>
+                  </div>
+                  <div class="sql-reference__tags">
+                    <el-tag v-for="tableName in sqlRelevantTableNames(task)" :key="tableName" effect="plain">
+                      {{ tableName }}
+                    </el-tag>
+                  </div>
+                </div>
                 <ul class="task-list task-list--compact">
-                  <li v-for="line in sqlScenario(task)?.schema" :key="line">
+                  <li v-for="line in sqlRelevantSchemaLines(task)" :key="line">
                     <code>{{ line }}</code>
                   </li>
                 </ul>
@@ -746,7 +967,63 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 <pre class="task-code"><code>{{ pythonExampleCode(task) }}</code></pre>
               </div>
 
-              <div class="task-card__block">
+              <div class="task-card__block" :class="{ 'task-card__block--sql-editor': Boolean(getSqlRunner(task)) }">
+                <div v-if="getSqlRunner(task)" class="sql-browser">
+                  <div class="sql-browser__intro">
+                    <h3>Данные для задачи</h3>
+                    <p class="muted">Открывай нужную таблицу и сразу смотри строки.</p>
+                  </div>
+
+                  <div class="sql-browser__list">
+                    <button
+                      v-for="tableName in sqlRelevantTableNames(task)"
+                      :key="`${task.id}-${tableName}`"
+                      type="button"
+                      class="sql-browser__button"
+                      :class="{ 'is-active': currentSqlBrowserTableName(task) === tableName }"
+                      @click="setSqlBrowserTable(task.id, tableName)"
+                    >
+                      {{ tableName }}
+                    </button>
+                  </div>
+
+                  <div v-if="sqlBrowserPreview(task)" class="sql-browser__viewer">
+                    <div class="sql-browser__viewer-header">
+                      <div>
+                        <h4>{{ sqlBrowserPreview(task)?.name }}</h4>
+                        <p class="sql-browser__schema">{{ sqlBrowserPreview(task)?.schema }}</p>
+                      </div>
+                      <div class="sql-browser__stats">
+                        <el-tag effect="plain" type="success">{{ formatRowsLabel(sqlBrowserPreview(task)?.totalRows ?? 0) }}</el-tag>
+                        <el-tag effect="plain">{{ formatFieldsLabel(sqlBrowserPreview(task)?.columns.length ?? 0) }}</el-tag>
+                      </div>
+                    </div>
+
+                    <div class="table-shell sql-browser__table-shell">
+                      <table class="task-table">
+                        <thead>
+                          <tr>
+                            <th v-for="column in sqlBrowserPreview(task)?.columns ?? []" :key="column">{{ column }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-if="(sqlBrowserPreview(task)?.rows.length ?? 0) === 0">
+                            <td :colspan="sqlBrowserPreview(task)?.columns.length || 1">В таблице нет строк</td>
+                          </tr>
+                          <tr
+                            v-for="(row, rowIndex) in sqlBrowserPreview(task)?.rows ?? []"
+                            :key="`${task.id}-browser-row-${rowIndex}`"
+                          >
+                            <td v-for="(cell, cellIndex) in row" :key="`${task.id}-browser-cell-${rowIndex}-${cellIndex}`">
+                              {{ cell }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="task-editor__header">
                   <h3 v-if="getSqlRunner(task)">Твой SQL</h3>
                   <h3 v-else-if="getHtmlRunner(task)">Твой HTML/CSS</h3>
@@ -811,21 +1088,28 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                   />
                 </div>
 
-                <div v-if="runStates[task.id]?.columns?.length && runStates[task.id]?.rows" class="task-card__block">
-                  <h3>Фактический результат</h3>
+                <div
+                  v-for="(table, tableIndex) in runStates[task.id]?.actualTables ?? []"
+                  :key="`${task.id}-actual-table-${tableIndex}`"
+                  class="task-card__block"
+                >
+                  <div class="task-table__header">
+                    <h3>{{ table.title }}</h3>
+                    <el-tag effect="plain" type="success">{{ formatRowsLabel(table.rows.length) }}</el-tag>
+                  </div>
                   <div class="table-shell">
                     <table class="task-table">
                       <thead>
                         <tr>
-                          <th v-for="column in runStates[task.id]?.columns" :key="column">{{ column }}</th>
+                          <th v-for="column in table.columns" :key="column">{{ column }}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr v-if="(runStates[task.id]?.rows?.length ?? 0) === 0">
-                          <td :colspan="runStates[task.id]?.columns?.length ?? 1">Запрос вернул 0 строк</td>
+                        <tr v-if="table.rows.length === 0">
+                          <td :colspan="table.columns.length || 1">Запрос вернул 0 строк</td>
                         </tr>
-                        <tr v-for="(row, rowIndex) in runStates[task.id]?.rows" :key="`${task.id}-row-${rowIndex}`">
-                          <td v-for="(cell, cellIndex) in row" :key="`${task.id}-cell-${rowIndex}-${cellIndex}`">
+                        <tr v-for="(row, rowIndex) in table.rows" :key="`${task.id}-row-${tableIndex}-${rowIndex}`">
+                          <td v-for="(cell, cellIndex) in row" :key="`${task.id}-cell-${tableIndex}-${rowIndex}-${cellIndex}`">
                             {{ cell }}
                           </td>
                         </tr>
@@ -835,25 +1119,32 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 </div>
 
                 <div
-                  v-if="runStates[task.id]?.expectedColumns?.length && runStates[task.id]?.expectedRows"
+                  v-for="(table, tableIndex) in runStates[task.id]?.expectedTables ?? []"
+                  :key="`${task.id}-expected-table-${tableIndex}`"
                   class="task-card__block"
                 >
-                  <h3>Эталонный результат</h3>
+                  <div class="task-table__header">
+                    <h3>{{ table.title }}</h3>
+                    <el-tag effect="plain">{{ formatRowsLabel(table.rows.length) }}</el-tag>
+                  </div>
                   <div class="table-shell">
                     <table class="task-table">
                       <thead>
                         <tr>
-                          <th v-for="column in runStates[task.id]?.expectedColumns" :key="column">{{ column }}</th>
+                          <th v-for="column in table.columns" :key="column">{{ column }}</th>
                         </tr>
                       </thead>
                       <tbody>
+                        <tr v-if="table.rows.length === 0">
+                          <td :colspan="table.columns.length || 1">Запрос вернул 0 строк</td>
+                        </tr>
                         <tr
-                          v-for="(row, rowIndex) in runStates[task.id]?.expectedRows"
-                          :key="`${task.id}-expected-row-${rowIndex}`"
+                          v-for="(row, rowIndex) in table.rows"
+                          :key="`${task.id}-expected-row-${tableIndex}-${rowIndex}`"
                         >
                           <td
                             v-for="(cell, cellIndex) in row"
-                            :key="`${task.id}-expected-cell-${rowIndex}-${cellIndex}`"
+                            :key="`${task.id}-expected-cell-${tableIndex}-${rowIndex}-${cellIndex}`"
                           >
                             {{ cell }}
                           </td>
@@ -871,6 +1162,21 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 <div v-if="runStates[task.id]?.expectedText" class="task-card__block">
                   <h3>Ожидаемый вывод</h3>
                   <pre class="task-code"><code>{{ runStates[task.id]?.expectedText }}</code></pre>
+                </div>
+
+                <div v-if="runStates[task.id]?.solutionPreview" class="task-card__block">
+                  <div class="task-solution__header">
+                    <h3>{{ solutionHeadingForResult(task.id, runStates[task.id]) }}</h3>
+                    <el-button
+                      v-if="shouldShowFullSolutionButton(runStates[task.id])"
+                      link
+                      type="primary"
+                      @click="toggleResultSolution(task.id)"
+                    >
+                      {{ expandedResultSolutions[task.id] ? 'Скрыть полное решение' : 'Показать решение полностью' }}
+                    </el-button>
+                  </div>
+                  <pre class="task-code"><code>{{ solutionTextForResult(task.id, runStates[task.id]) }}</code></pre>
                 </div>
 
                 <div v-if="runStates[task.id]?.stderr" class="task-card__block">
@@ -1083,6 +1389,122 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   gap: 16px;
 }
 
+.sql-reference__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sql-reference__tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.task-card__block--sql-editor {
+  position: relative;
+  min-height: 420px;
+  padding-left: 336px;
+}
+
+.sql-browser {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 308px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: rgba(72, 116, 255, 0.05);
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.sql-browser__intro h3,
+.sql-browser__viewer-header h4 {
+  margin: 0 0 8px;
+}
+
+.sql-browser__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sql-browser__button {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: rgba(12, 19, 34, 0.7);
+  color: var(--app-text-strong);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sql-browser__button.is-active {
+  border-color: rgba(72, 116, 255, 0.55);
+  background: rgba(72, 116, 255, 0.18);
+}
+
+.sql-browser__viewer {
+  display: grid;
+  gap: 10px;
+}
+
+.sql-browser__viewer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sql-browser__schema {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sql-browser__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sql-browser__table-shell {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.task-table__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.task-table__header h3 {
+  margin: 0;
+}
+
+.task-solution__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.task-solution__header h3 {
+  margin: 0;
+}
+
 .task-editor__header {
   display: flex;
   align-items: flex-start;
@@ -1178,6 +1600,23 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 
   .task-summary {
     justify-content: flex-start;
+  }
+
+  .sql-reference__header,
+  .sql-browser__viewer-header,
+  .task-table__header {
+    display: grid;
+  }
+
+  .task-card__block--sql-editor {
+    min-height: auto;
+    padding-left: 0;
+  }
+
+  .sql-browser {
+    position: static;
+    width: 100%;
+    margin-bottom: 14px;
   }
 
   .task-editor__actions {

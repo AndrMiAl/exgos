@@ -15,7 +15,333 @@ export type SqlResultTable = {
   rows: Array<Array<string | number | null>>
 }
 
+type SqlAstNode = Record<string, unknown>
+
+type SqlOrderAst = {
+  direction?: string
+  expression?: SqlAstNode
+}
+
+type SqlOverAst = {
+  order?: SqlOrderAst[]
+  partition?: SqlAstNode[]
+}
+
+type SqlColumnAst = SqlAstNode & {
+  as?: string
+  funcid?: string
+  over?: SqlOverAst
+}
+
+type SqlRankConfig = {
+  alias: string
+  helperAliases: string[]
+  mode: 'DENSE_RANK' | 'RANK'
+  orderAliases: Array<{
+    alias: string
+    direction: 'ASC' | 'DESC'
+  }>
+  partitionAliases: string[]
+}
+
+function cloneAstNode<T>(node: T): T {
+  if (Array.isArray(node)) {
+    return node.map((item) => cloneAstNode(item)) as T
+  }
+
+  if (node && typeof node === 'object') {
+    const clonedNode = Object.create(Object.getPrototypeOf(node)) as Record<string, unknown>
+
+    Object.entries(node).forEach(([key, value]) => {
+      clonedNode[key] = cloneAstNode(value)
+    })
+
+    return clonedNode as T
+  }
+
+  return node
+}
+
+function buildRankHelperAlias(rankIndex: number, section: 'order' | 'partition', valueIndex: number) {
+  return `__gos_rank_${rankIndex}_${section}_${valueIndex}`
+}
+
+function isSqlObjectRows(result: unknown): result is Array<Record<string, unknown>> {
+  return (
+    Array.isArray(result) &&
+    result.every((entry) => typeof entry === 'object' && entry !== null && !Array.isArray(entry))
+  )
+}
+
+function compareSqlValues(left: unknown, right: unknown) {
+  if (left === right) {
+    return 0
+  }
+
+  if (left === null || left === undefined) {
+    return -1
+  }
+
+  if (right === null || right === undefined) {
+    return 1
+  }
+
+  if (left instanceof Date && right instanceof Date) {
+    return left.getTime() - right.getTime()
+  }
+
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left - right
+  }
+
+  return String(left).localeCompare(String(right), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  })
+}
+
+function compareRankRows(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+  orderAliases: SqlRankConfig['orderAliases'],
+) {
+  for (const orderAlias of orderAliases) {
+    const directionFactor = orderAlias.direction === 'DESC' ? -1 : 1
+    const compared = compareSqlValues(left[orderAlias.alias], right[orderAlias.alias])
+
+    if (compared !== 0) {
+      return compared * directionFactor
+    }
+  }
+
+  return 0
+}
+
+function sameRankValues(
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+  orderAliases: SqlRankConfig['orderAliases'],
+) {
+  return orderAliases.every((orderAlias) => compareSqlValues(left[orderAlias.alias], right[orderAlias.alias]) === 0)
+}
+
+function applyRankConfigs(rows: Array<Record<string, unknown>>, rankConfigs: SqlRankConfig[]) {
+  if (rows.length === 0 || rankConfigs.length === 0) {
+    return rows
+  }
+
+  const helperAliasesToRemove = new Set<string>()
+
+  for (const rankConfig of rankConfigs) {
+    rankConfig.helperAliases.forEach((alias) => helperAliasesToRemove.add(alias))
+
+    const partitions = new Map<string, number[]>()
+
+    rows.forEach((row, rowIndex) => {
+      const partitionKey = JSON.stringify(rankConfig.partitionAliases.map((alias) => row[alias] ?? null))
+      const partitionRows = partitions.get(partitionKey)
+
+      if (partitionRows) {
+        partitionRows.push(rowIndex)
+        return
+      }
+
+      partitions.set(partitionKey, [rowIndex])
+    })
+
+    partitions.forEach((partitionRowIndices) => {
+      if (rankConfig.orderAliases.length === 0) {
+        partitionRowIndices.forEach((rowIndex) => {
+          rows[rowIndex][rankConfig.alias] = 1
+        })
+        return
+      }
+
+      const sortedIndices = [...partitionRowIndices].sort((leftIndex, rightIndex) => {
+        const compared = compareRankRows(rows[leftIndex], rows[rightIndex], rankConfig.orderAliases)
+        return compared !== 0 ? compared : leftIndex - rightIndex
+      })
+
+      let denseRank = 1
+      let rank = 1
+
+      sortedIndices.forEach((rowIndex, sortedIndex) => {
+        if (sortedIndex > 0) {
+          const previousRowIndex = sortedIndices[sortedIndex - 1]
+
+          if (!sameRankValues(rows[previousRowIndex], rows[rowIndex], rankConfig.orderAliases)) {
+            denseRank += 1
+            rank = sortedIndex + 1
+          }
+        }
+
+        rows[rowIndex][rankConfig.alias] = rankConfig.mode === 'DENSE_RANK' ? denseRank : rank
+      })
+    })
+  }
+
+  rows.forEach((row) => {
+    helperAliasesToRemove.forEach((alias) => {
+      delete row[alias]
+    })
+  })
+
+  return rows
+}
+
+function wrapCompiledSelectWithRanks<T extends ((params?: unknown, cb?: unknown, oldscope?: unknown) => unknown) & { query?: unknown }>(
+  statement: T,
+  rankConfigs: SqlRankConfig[],
+) {
+  const wrappedStatement = ((params?: unknown, cb?: unknown, oldscope?: unknown) => {
+    if (typeof cb === 'function') {
+      return statement(
+        params,
+        (result: unknown, error?: unknown) => {
+          if (error || !isSqlObjectRows(result)) {
+            return (cb as (result: unknown, error?: unknown) => unknown)(result, error)
+          }
+
+          try {
+            return (cb as (result: unknown, error?: unknown) => unknown)(applyRankConfigs(result, rankConfigs))
+          } catch (rankError) {
+            return (cb as (result: unknown, error?: unknown) => unknown)(null, rankError)
+          }
+        },
+        oldscope,
+      )
+    }
+
+    const result = statement(params, undefined, oldscope)
+    return isSqlObjectRows(result) ? applyRankConfigs(result, rankConfigs) : result
+  }) as T
+
+  wrappedStatement.query = statement.query
+  return wrappedStatement
+}
+
+function prepareRankColumnsForCompile(selectStatement: { columns?: SqlColumnAst[] }) {
+  if (!Array.isArray(selectStatement.columns) || selectStatement.columns.length === 0) {
+    return { rankConfigs: [], restore: () => undefined }
+  }
+
+  const originalColumns = selectStatement.columns
+  const compiledColumns = [...originalColumns]
+  const rankConfigs: SqlRankConfig[] = []
+
+  originalColumns.forEach((column, rankIndex) => {
+    const functionId = typeof column.funcid === 'string' ? column.funcid.toUpperCase() : ''
+
+    if (functionId !== 'RANK' && functionId !== 'DENSE_RANK') {
+      return
+    }
+
+    const alias = typeof column.as === 'string' && column.as.trim() ? column.as : `rank_${rankIndex + 1}`
+    const partitionAliases: string[] = []
+    const orderAliases: SqlRankConfig['orderAliases'] = []
+    const helperAliases: string[] = []
+
+    column.over?.partition?.forEach((partitionExpression, partitionIndex) => {
+      const helperAlias = buildRankHelperAlias(rankIndex, 'partition', partitionIndex)
+      const helperColumn = cloneAstNode(partitionExpression) as SqlColumnAst
+
+      delete helperColumn.as
+      helperColumn.as = helperAlias
+
+      compiledColumns.push(helperColumn)
+      helperAliases.push(helperAlias)
+      partitionAliases.push(helperAlias)
+    })
+
+    column.over?.order?.forEach((orderExpression, orderIndex) => {
+      if (!orderExpression.expression) {
+        return
+      }
+
+      const helperAlias = buildRankHelperAlias(rankIndex, 'order', orderIndex)
+      const helperColumn = cloneAstNode(orderExpression.expression) as SqlColumnAst
+
+      delete helperColumn.as
+      helperColumn.as = helperAlias
+
+      compiledColumns.push(helperColumn)
+      helperAliases.push(helperAlias)
+      orderAliases.push({
+        alias: helperAlias,
+        direction: orderExpression.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+      })
+    })
+
+    const placeholderColumn = cloneAstNode(column) as SqlColumnAst
+    placeholderColumn.as = alias
+    placeholderColumn.funcid = 'ROWNUM'
+    delete placeholderColumn.over
+
+    compiledColumns[rankIndex] = placeholderColumn
+    rankConfigs.push({
+      alias,
+      helperAliases,
+      mode: functionId as 'DENSE_RANK' | 'RANK',
+      orderAliases,
+      partitionAliases,
+    })
+  })
+
+  if (rankConfigs.length > 0) {
+    selectStatement.columns = compiledColumns
+  }
+
+  return {
+    rankConfigs,
+    restore: () => {
+      selectStatement.columns = originalColumns
+    },
+  }
+}
+
+function installWindowRankSupport() {
+  const alasqlWithInternals = alasql as typeof alasql & {
+    yy?: {
+      Select?: {
+        prototype?: {
+          __gosRankPatched?: boolean
+          compile?: (...args: unknown[]) => unknown
+        }
+      }
+    }
+  }
+  const selectPrototype = alasqlWithInternals.yy?.Select?.prototype
+
+  if (!selectPrototype?.compile || selectPrototype.__gosRankPatched) {
+    return
+  }
+
+  const originalCompile = selectPrototype.compile
+
+  selectPrototype.compile = function patchedCompile(this: { columns?: SqlColumnAst[] }, ...args: unknown[]) {
+    const prepared = prepareRankColumnsForCompile(this)
+
+    try {
+      const statement = originalCompile.apply(this, args) as
+        | (((params?: unknown, cb?: unknown, oldscope?: unknown) => unknown) & { query?: unknown })
+        | undefined
+
+      if (!statement || prepared.rankConfigs.length === 0) {
+        return statement
+      }
+
+      return wrapCompiledSelectWithRanks(statement, prepared.rankConfigs)
+    } finally {
+      prepared.restore()
+    }
+  }
+
+  selectPrototype.__gosRankPatched = true
+}
+
 function installSqlHelpers() {
+  installWindowRankSupport()
+
   alasql.fn.TSQLDATETIME = (...args: unknown[]) => {
     const [dateTrip, timeOut] = args as [Date | string, string]
     const parsed = new Date(dateTrip)
@@ -220,23 +546,31 @@ function normalizeResultTable(rows: Array<Record<string, unknown>>): SqlResultTa
   }
 }
 
-function extractSqlTables(result: unknown, statementCount: number) {
-  if (statementCount <= 1) {
-    const table = normalizeResultTable(Array.isArray(result) ? (result as Array<Record<string, unknown>>) : [])
-    return {
-      tables: [table],
-      lastTable: table,
-    }
+function toSqlResultTable(result: unknown): SqlResultTable {
+  if (!Array.isArray(result)) {
+    return { columns: [], rows: [] }
   }
 
-  const tables = (Array.isArray(result) ? result : []).map((entry) =>
-    normalizeResultTable(Array.isArray(entry) ? (entry as Array<Record<string, unknown>>) : []),
+  return normalizeResultTable(
+    result.filter(
+      (entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null && !Array.isArray(entry),
+    ),
   )
+}
 
-  return {
-    tables,
-    lastTable: tables.at(-1) ?? { columns: [], rows: [] },
+function extractSqlTables(result: unknown) {
+  if (!Array.isArray(result)) {
+    return [{ columns: [], rows: [] }]
   }
+
+  const hasNestedTables = result.some((entry) => Array.isArray(entry))
+
+  if (!hasNestedTables) {
+    return [toSqlResultTable(result)]
+  }
+
+  const tables = result.map((entry) => toSqlResultTable(entry))
+  return tables.length > 0 ? tables : [{ columns: [], rows: [] }]
 }
 
 function executeQuery(query: string, scenarioId: GeSqlScenarioId): SqlRunResult {
@@ -267,9 +601,11 @@ function executeQuery(query: string, scenarioId: GeSqlScenarioId): SqlRunResult 
 
     const db = createDatabase(scenario)
     const normalizedQuery = normalizeQuery(query)
-    const statementCount = splitSqlStatements(normalizedQuery).length
-    const result = db.exec(normalizedQuery)
-    const { tables, lastTable } = extractSqlTables(result, statementCount)
+    const statements = splitSqlStatements(normalizedQuery)
+
+    // Выполняем каждый SELECT отдельно, чтобы в интерфейсе всегда были все результаты по порядку.
+    const tables = statements.flatMap((statement) => extractSqlTables(db.exec(statement)))
+    const lastTable = tables.at(-1) ?? { columns: [], rows: [] }
 
     return {
       status: 'ok',
