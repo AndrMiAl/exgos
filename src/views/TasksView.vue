@@ -257,7 +257,7 @@ function readStoredCodeValue(task: ViewTask) {
       return fallback
     }
 
-    return stored
+    return isMlTask(task) ? normalizeMlDatasetAccess(stored) : stored
   } catch {
     return fallback
   }
@@ -433,8 +433,38 @@ function buildPythonExampleBlock(task: ViewTask) {
   return `${task.solution.trimEnd()}\n\n${sampleCode}`
 }
 
+function normalizeMlDatasetAccess(code: string) {
+  return code
+    .replace(/pd\.read_csv\(\s*DATA_DIR\s*\/\s*(["'])[^"']+\1\s*(,)?/gu, (_match, _quote, comma) => {
+      return `pd.read_csv(DATASET_PATH${comma ? ',' : ''}`
+    })
+    .replace(/pd\.read_csv\(\s*(["'])[^"']+\.(?:csv|tsv)\1\s*(,)?/giu, (_match, _quote, comma) => {
+      return `pd.read_csv(DATASET_PATH${comma ? ',' : ''}`
+    })
+}
+
+function normalizeMlDraft(taskId: string) {
+  const task = taskById.get(taskId)
+
+  if (!task || !isMlTask(task)) {
+    return
+  }
+
+  const currentCode = codeDrafts[taskId] ?? ''
+  const normalizedCode = normalizeMlDatasetAccess(currentCode)
+
+  if (normalizedCode === currentCode) {
+    return
+  }
+
+  codeDrafts[taskId] = normalizedCode
+  persistCode(taskId)
+  queueEditorResize(taskId)
+}
+
 function fillWithSolution(task: ViewTask) {
-  codeDrafts[task.id] = getPythonRunner(task)?.sampleCode ? buildPythonExampleBlock(task) : task.solution
+  const nextCode = getPythonRunner(task)?.sampleCode ? buildPythonExampleBlock(task) : task.solution
+  codeDrafts[task.id] = isMlTask(task) ? normalizeMlDatasetAccess(nextCode) : nextCode
   persistCode(task.id)
   queueEditorResize(task.id)
 }
@@ -584,7 +614,7 @@ function mlCodeDefinesTask(task: ViewTask, code: string) {
 }
 
 function buildPythonExecutionCode(task: ViewTask, mode: 'run' | 'check') {
-  const currentCode = codeDrafts[task.id] ?? ''
+  const currentCode = isMlTask(task) ? normalizeMlDatasetAccess(codeDrafts[task.id] ?? '') : codeDrafts[task.id] ?? ''
   const trimmedCode = currentCode.trim()
   const sampleCode = pythonExampleCode(task).trim()
   const starterCode = resolveStarterCode(task).trim()
@@ -710,7 +740,18 @@ function extractMlDatasetName(condition?: string) {
   return text.match(mlDatasetPattern)?.[1] ?? ''
 }
 
+function mlRequiredFileName(task: ViewTask) {
+  const fromCondition = extractMlDatasetName(task.condition)
+  return fromCondition && examMlFilesByName[fromCondition] ? fromCondition : ''
+}
+
 function currentMlNotebookFileName(task: ViewTask) {
+  const required = mlRequiredFileName(task)
+
+  if (required) {
+    return required
+  }
+
   const selected = selectedMlNotebookFiles[task.id]
 
   if (selected && examMlFilesByName[selected]) {
@@ -736,10 +777,25 @@ function setMlNotebookFile(taskId: string, fileName: string) {
     return
   }
 
+  const task = taskById.get(taskId)
+  const required = task ? mlRequiredFileName(task) : ''
+
+  if (required && fileName !== required) {
+    return
+  }
+
   selectedMlNotebookFiles[taskId] = fileName
+  normalizeMlDraft(taskId)
 }
 
 function mlNotebookFiles(task: ViewTask) {
+  const required = mlRequiredFileName(task)
+
+  if (required) {
+    const file = examMlFilesByName[required]
+    return file ? [file] : []
+  }
+
   const currentName = currentMlNotebookFileName(task)
 
   return [...examMlFileCatalog].sort((left, right) => {
