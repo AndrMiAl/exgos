@@ -846,6 +846,7 @@ ${mlCommonSetupCode}
 
 ${mlxtendCompatSetupCode}
 
+import csv
 from io import StringIO
 
 DATA_DIR = Path("./ml-files")
@@ -875,7 +876,31 @@ def _codex_read_csv(path_or_buffer, *args, **kwargs):
 
             return pd.DataFrame({"items": rows})
 
-        return pd._codex_original_read_csv(StringIO(DATASET_TEXT), *args, **kwargs)
+        try:
+            return pd._codex_original_read_csv(StringIO(DATASET_TEXT), *args, **kwargs)
+        except Exception:
+            delimiter = kwargs.get("sep", ",")
+            parsed_rows = list(csv.reader(StringIO(DATASET_TEXT), delimiter=delimiter))
+
+            if not parsed_rows:
+                return pd.DataFrame()
+
+            names = kwargs.get("names")
+            header = kwargs.get("header", "infer")
+
+            if isinstance(names, (list, tuple)) and len(names) > 0:
+                data_rows = parsed_rows if header is None else parsed_rows[1:]
+                frame = pd.DataFrame(data_rows, columns=list(names))
+            elif header is None:
+                frame = pd.DataFrame(parsed_rows)
+            else:
+                columns = parsed_rows[0]
+                data_rows = parsed_rows[1:]
+                frame = pd.DataFrame(data_rows, columns=columns)
+
+            frame = frame.replace("", pd.NA)
+            frame = frame.apply(lambda column: pd.to_numeric(column, errors="ignore"))
+            return frame
 
     return pd._codex_original_read_csv(path_or_buffer, *args, **kwargs)
 
