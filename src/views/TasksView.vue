@@ -848,6 +848,7 @@ ${mlxtendCompatSetupCode}
 
 import csv
 from io import StringIO
+from pandas.io.parsers.readers import read_csv as pandas_builtin_read_csv
 
 DATA_DIR = Path("./ml-files")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -855,9 +856,6 @@ DATASET_NAME = ${JSON.stringify(file.name)}
 DATASET_PATH = DATA_DIR / DATASET_NAME
 DATASET_TEXT = ${JSON.stringify(fileText)}
 DATASET_PATH.write_text(DATASET_TEXT, encoding="utf-8")
-
-if not hasattr(pd, "_codex_original_read_csv"):
-    pd._codex_original_read_csv = pd.read_csv
 
 def _codex_read_csv(path_or_buffer, *args, **kwargs):
     path_text = str(path_or_buffer)
@@ -876,33 +874,37 @@ def _codex_read_csv(path_or_buffer, *args, **kwargs):
 
             return pd.DataFrame({"items": rows})
 
-        try:
-            return pd._codex_original_read_csv(StringIO(DATASET_TEXT), *args, **kwargs)
-        except Exception:
-            delimiter = kwargs.get("sep", ",")
-            parsed_rows = list(csv.reader(StringIO(DATASET_TEXT), delimiter=delimiter))
+        delimiter = kwargs.get("sep", ",")
+        parsed_rows = list(csv.reader(StringIO(DATASET_TEXT), delimiter=delimiter))
 
-            if not parsed_rows:
-                return pd.DataFrame()
+        if not parsed_rows:
+            return pd.DataFrame()
 
-            names = kwargs.get("names")
-            header = kwargs.get("header", "infer")
+        names = kwargs.get("names")
+        header = kwargs.get("header", "infer")
 
-            if isinstance(names, (list, tuple)) and len(names) > 0:
-                data_rows = parsed_rows if header is None else parsed_rows[1:]
-                frame = pd.DataFrame(data_rows, columns=list(names))
-            elif header is None:
-                frame = pd.DataFrame(parsed_rows)
-            else:
-                columns = parsed_rows[0]
-                data_rows = parsed_rows[1:]
-                frame = pd.DataFrame(data_rows, columns=columns)
+        if isinstance(names, (list, tuple)) and len(names) > 0:
+            columns = list(names)
+            data_rows = parsed_rows if header is None else parsed_rows[1:]
+            frame = pd.DataFrame(data_rows, columns=columns)
+        elif header is None:
+            frame = pd.DataFrame(parsed_rows)
+        else:
+            columns = parsed_rows[0]
+            data_rows = parsed_rows[1:]
+            frame = pd.DataFrame(data_rows, columns=columns)
 
-            frame = frame.replace("", pd.NA)
-            frame = frame.apply(lambda column: pd.to_numeric(column, errors="ignore"))
-            return frame
+        frame = frame.replace("", pd.NA)
 
-    return pd._codex_original_read_csv(path_or_buffer, *args, **kwargs)
+        for column_name in frame.columns:
+            converted = pd.to_numeric(frame[column_name], errors="coerce")
+
+            if converted.notna().sum() == frame[column_name].notna().sum():
+                frame[column_name] = converted
+
+        return frame
+
+    return pandas_builtin_read_csv(path_or_buffer, *args, **kwargs)
 
 pd.read_csv = _codex_read_csv
 `
