@@ -108,6 +108,14 @@ function buildExamTaskSqlRunner(_solution: string, taskNumber: number): GeTaskRu
   }
 }
 
+function buildMlRunner(): GeTaskRunner {
+  return {
+    language: 'python',
+    starterCode: pythonStarter,
+    note: 'Можно писать свой код и запускать его прямо здесь. Выбранный CSV подгружается в папку ml-files, а построенные графики появляются ниже в результате запуска.',
+  }
+}
+
 function buildSourceLabel(language: ExamTaskLanguage) {
   if (language === 'web') {
     return 'WEB-решение'
@@ -210,7 +218,7 @@ export const examTaskSections: ExamTaskSectionMeta[] = [
     id: 'ml',
     title: 'ML',
     description: 'Задачи из Word по машинному обучению. Здесь доступны условия и готовые решения по номерам.',
-    tasks: parseWordTasks(mlWordTasks, 'ml', 'python'),
+    tasks: parseWordTasks(mlWordTasks, 'ml', 'python', () => buildMlRunner()),
   },
   {
     id: 'java',

@@ -13,12 +13,26 @@ export type PythonRunResult = {
 export type PythonRunOptions = {
   stdin?: string
   setupCode?: string
+  pyodidePackages?: string[]
+  pipPackages?: string[]
 }
 
 const PYODIDE_INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
+const benignStderrPatterns = [/^Matplotlib is building the font cache; this may take a moment\.?$/u]
 
 let runtimePromise: Promise<any> | null = null
 let scriptPromise: Promise<void> | null = null
+const loadedPackages = new Set<string>()
+const installedPipPackages = new Set<string>()
+
+function sanitizePythonStderr(stderr: string) {
+  const cleanedLines = stderr
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((line) => !benignStderrPatterns.some((pattern) => pattern.test(line.trim())))
+
+  return cleanedLines.join('\n').trim()
+}
 
 function loadScript(src: string) {
   if (scriptPromise) {
@@ -110,6 +124,9 @@ try:
     if _setup_code.strip():
         exec(_setup_code, _globals)
     exec(_code, _globals)
+    _plot_flusher = _globals.get("__emit_captured_plots__")
+    if callable(_plot_flusher):
+        _plot_flusher()
 except BaseException:
     _status = "error"
     traceback.print_exc()
@@ -128,8 +145,32 @@ json.dumps({
 
   try {
     await pyodide.loadPackagesFromImports(`${setupCode}\n${code}`)
+
+    const extraPackages = resolvedOptions.pyodidePackages?.filter((packageName) => !loadedPackages.has(packageName)) ?? []
+
+    if (extraPackages.length > 0) {
+      await pyodide.loadPackage(extraPackages)
+      extraPackages.forEach((packageName) => loadedPackages.add(packageName))
+    }
+
+    const pipPackages = resolvedOptions.pipPackages?.filter((packageName) => !installedPipPackages.has(packageName)) ?? []
+
+    if (pipPackages.length > 0) {
+      await pyodide.loadPackage('micropip')
+      await pyodide.runPythonAsync(`
+import micropip
+await micropip.install(${JSON.stringify(pipPackages)})
+`)
+      pipPackages.forEach((packageName) => installedPipPackages.add(packageName))
+    }
+
     const rawResult = await pyodide.runPythonAsync(script)
-    return JSON.parse(String(rawResult)) as PythonRunResult
+    const parsedResult = JSON.parse(String(rawResult)) as PythonRunResult
+
+    return {
+      ...parsedResult,
+      stderr: sanitizePythonStderr(parsedResult.stderr),
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return {

@@ -5,9 +5,13 @@ import { EditPen, House } from '@element-plus/icons-vue'
 import { RouterLink } from 'vue-router'
 
 import { examTaskSections } from '@/data/examTasks'
+import { examMlFileCatalog, examMlFilesByName } from '@/data/examMlFiles'
+import type { ExamMlFileMeta } from '@/data/examMlFiles'
+import { mlCommonSetupCode, mlPlotStdoutMarker, mlxtendCompatSetupCode } from '@/data/gePythonSetups'
 import { geSqlScenarios } from '@/data/geSqlScenarios'
 import type { GeTaskRunner } from '@/data/geTaskRunners'
 import { runPythonCode } from '@/utils/pythonRunner'
+import type { PythonRunOptions } from '@/utils/pythonRunner'
 import { compareSqlResults, runSqlQuery } from '@/utils/sqlRunner'
 import type { SqlRunResult } from '@/utils/sqlRunner'
 
@@ -68,6 +72,7 @@ type RunState = {
   title: string
   message: string
   stdout?: string
+  plotImages?: string[]
   stderr?: string
   expectedText?: string
   actualTables?: SqlTableView[]
@@ -117,11 +122,19 @@ const activeTaskPanels = reactive<Record<string, TaskPanelId>>({})
 const runStates = reactive<Record<string, RunState | undefined>>({})
 const expandedResultSolutions = reactive<Record<string, boolean>>({})
 const selectedSqlBrowserTables = reactive<Record<string, string>>({})
+const selectedMlNotebookFiles = reactive<Record<string, string>>({})
 const runningTaskId = ref('')
 const editorTextareas = new Map<string, HTMLTextAreaElement>()
 const selectedSectionId = ref(examSections[0]?.id ?? '')
 const activeSection = computed(() => {
   return taskCatalog.sections.find((section) => section.id === selectedSectionId.value) ?? taskCatalog.sections[0]
+})
+const activeSectionDescription = computed(() => {
+  if (activeSection.value?.id === 'ml') {
+    return 'Задачи из Word по машинному обучению. Для каждой карточки есть условие, тетрадь с решением, свой редактор и CSV-файл.'
+  }
+
+  return activeSection.value?.description ?? ''
 })
 const activeCatalogStats = computed(() => {
   const sections = taskCatalog.sections
@@ -141,8 +154,31 @@ const activeSectionStats = computed(() => ({
   taskCount: activeSection.value?.tasks.length ?? 0,
   runnableCount: activeSection.value?.tasks.filter((task) => Boolean(task.runner)).length ?? 0,
 }))
+const taskCatalogHelpText = computed(() => {
+  if (selectedSectionId.value === 'ml') {
+    return 'Выбери раздел справа сверху. Для ML есть тетрадь с решением, свой редактор, запуск кода в браузере и подгрузка выбранного CSV в папку ml-files.'
+  }
+
+  return taskCatalog.helpText
+})
 
 const editorIndent = '    '
+const mlDatasetPattern = /\b([A-Za-z0-9_.-]+\.(?:csv|tsv|xlsx|xls))\b/iu
+const mlNotebookImports = `from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, mean_absolute_error, mean_squared_error
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+DATA_DIR = Path("./ml-files")`
+const mlFileTextCache = new Map<string, Promise<string>>()
 
 for (const task of allTasks) {
   codeDrafts[task.id] = readStoredCodeValue(task)
@@ -151,6 +187,11 @@ for (const task of allTasks) {
 
   if (task.runner?.language === 'sql') {
     selectedSqlBrowserTables[task.id] = task.runner.focusTables?.[0] ?? ''
+  }
+
+  if (task.sectionId === 'ml') {
+    const fileName = extractMlDatasetName(task.condition)
+    selectedMlNotebookFiles[task.id] = examMlFilesByName[fileName] ? fileName : examMlFileCatalog[0]?.name ?? ''
   }
 }
 
@@ -163,10 +204,12 @@ function handleSectionSelect(sectionId: string | number) {
 }
 
 function panelOptions(task: ViewTask) {
-  const options: Array<{ label: string; value: TaskPanelId }> = [{ label: 'Решение', value: 'solution' }]
+  const options: Array<{ label: string; value: TaskPanelId }> = [
+    { label: isMlTask(task) ? 'Тетрадь' : 'Решение', value: 'solution' },
+  ]
 
   if (task.runner) {
-    options.push({ label: 'Редактор', value: 'editor' })
+    options.push({ label: isMlTask(task) ? 'Твой код' : 'Редактор', value: 'editor' })
   }
 
   return options
@@ -373,17 +416,21 @@ function handleEditorKeydown(taskId: string, event: KeyboardEvent) {
 }
 
 function resolveStarterCode(task: ViewTask) {
+  if (isMlTask(task)) {
+    return buildMlStarterCode(task)
+  }
+
   return task.runner?.starterCode ?? ''
 }
 
 function buildPythonExampleBlock(task: ViewTask) {
-  const runner = getPythonRunner(task)
+  const sampleCode = pythonExampleCode(task)
 
-  if (!runner?.sampleCode) {
+  if (!sampleCode) {
     return ''
   }
 
-  return `${task.solution.trimEnd()}\n\n${runner.sampleCode}`
+  return `${task.solution.trimEnd()}\n\n${sampleCode}`
 }
 
 function fillWithSolution(task: ViewTask) {
@@ -404,6 +451,33 @@ function resetDraft(task: ViewTask) {
 
 function normalizeOutput(value: string) {
   return value.replace(/\r\n/g, '\n').trim()
+}
+
+function parsePythonRunOutput(stdout: string) {
+  const lines = stdout.replace(/\r\n/g, '\n').split('\n')
+  const visibleLines: string[] = []
+  const plotImages: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    if (trimmed.startsWith(mlPlotStdoutMarker)) {
+      const encodedImage = trimmed.slice(mlPlotStdoutMarker.length)
+
+      if (encodedImage) {
+        plotImages.push(`data:image/png;base64,${encodedImage}`)
+      }
+
+      continue
+    }
+
+    visibleLines.push(line)
+  }
+
+  return {
+    stdout: visibleLines.join('\n').trim(),
+    plotImages,
+  }
 }
 
 function buildSolutionPreview(solution: string) {
@@ -445,18 +519,44 @@ function toggleResultSolution(taskId: string) {
   expandedResultSolutions[taskId] = !expandedResultSolutions[taskId]
 }
 
-function buildPythonRunMessage(task: ViewTask, stdout: string, stderr: string) {
-  if (stderr) {
+function buildPythonRunMessage(
+  status: 'ok' | 'error',
+  stdout: string,
+  stderr: string,
+  usedExampleCode: boolean,
+  plotCount: number,
+) {
+  if (status === 'error') {
     return 'Код выполнился с ошибкой. Посмотри traceback ниже.'
   }
 
+  if (stderr) {
+    if (plotCount > 0) {
+      return stdout
+        ? 'Код выполнился. Ниже показаны вывод, графики и служебные сообщения интерпретатора.'
+        : 'Код выполнился. Ниже показаны графики и служебные сообщения интерпретатора.'
+    }
+
+    return stdout
+      ? 'Код выполнился. Ниже показан вывод программы и служебные сообщения интерпретатора.'
+      : 'Код выполнился. Ниже показаны служебные сообщения интерпретатора.'
+  }
+
+  if (plotCount > 0) {
+    return stdout
+      ? usedExampleCode
+        ? 'Код выполнился. Ниже показаны вывод и графики на встроенном примере запуска.'
+        : 'Код выполнился. Ниже показаны вывод программы и построенные графики.'
+      : 'Код выполнился. Ниже показаны построенные графики.'
+  }
+
   if (stdout) {
-    return getPythonRunner(task)?.sampleCode
+    return usedExampleCode
       ? 'Код выполнился. Ниже показан фактический вывод на встроенном примере запуска.'
       : 'Код выполнился. Ниже показан фактический вывод программы.'
   }
 
-  return getPythonRunner(task)?.sampleCode
+  return usedExampleCode
     ? 'Код выполнился, но ничего не вывел. Нажми "Подставить решение" или добавь вызов из блока "Пример запуска".'
     : 'Код выполнился, но программа ничего не вывела.'
 }
@@ -466,17 +566,50 @@ function getPythonRunner(task: ViewTask) {
 }
 
 function pythonExampleCode(task: ViewTask) {
+  if (isMlTask(task)) {
+    return mlNotebookRunCell(task)
+  }
+
   return getPythonRunner(task)?.sampleCode ?? ''
 }
 
-function buildPythonExecutionCode(task: ViewTask) {
-  const runner = getPythonRunner(task)
+function mlTaskFunctionName(task: ViewTask) {
+  return `task${mlTaskNumber(task)}`
+}
+
+function mlCodeDefinesTask(task: ViewTask, code: string) {
+  const functionName = mlTaskFunctionName(task)
+  const functionPattern = new RegExp(`\\bdef\\s+${functionName}\\s*\\(`, 'u')
+  return functionPattern.test(code)
+}
+
+function buildPythonExecutionCode(task: ViewTask, mode: 'run' | 'check') {
   const currentCode = codeDrafts[task.id] ?? ''
   const trimmedCode = currentCode.trim()
-  const sampleCode = runner?.sampleCode?.trim()
-  const starterCode = runner?.starterCode?.trim() ?? ''
+  const sampleCode = pythonExampleCode(task).trim()
+  const starterCode = resolveStarterCode(task).trim()
 
-  if (!sampleCode || !trimmedCode || trimmedCode === starterCode) {
+  if (!sampleCode || !trimmedCode) {
+    return currentCode
+  }
+
+  if (isMlTask(task)) {
+    if (currentCode.includes('# быстрый прогон')) {
+      return `${currentCode.replace(/\n*# быстрый прогон[\s\S]*$/u, '').trimEnd()}\n\n${sampleCode}`
+    }
+
+    if (trimmedCode === starterCode) {
+      return `${currentCode.trimEnd()}\n\n${sampleCode}`
+    }
+
+    if (mode === 'check' || mlCodeDefinesTask(task, currentCode)) {
+      return `${currentCode.trimEnd()}\n\n${sampleCode}`
+    }
+
+    return currentCode
+  }
+
+  if (trimmedCode === starterCode) {
     return currentCode
   }
 
@@ -484,10 +617,19 @@ function buildPythonExecutionCode(task: ViewTask) {
     return currentCode
   }
 
-  return `${currentCode.trimEnd()}\n\n${runner?.sampleCode ?? ''}`
+  return `${currentCode.trimEnd()}\n\n${sampleCode}`
+}
+
+function pythonExecutionUsesExample(task: ViewTask, executionCode: string) {
+  const sampleCode = pythonExampleCode(task).trim()
+  return Boolean(sampleCode) && executionCode.includes(sampleCode)
 }
 
 function editorRows(task: ViewTask) {
+  if (isMlTask(task)) {
+    return 14
+  }
+
   return task.runner?.language === 'html' ? 14 : 9
 }
 
@@ -520,6 +662,10 @@ function runnerBadge(task: ViewTask) {
     return 'HTML-превью'
   }
 
+  if (isMlTask(task)) {
+    return 'ML Python'
+  }
+
   return 'Python в браузере'
 }
 
@@ -530,6 +676,10 @@ function runnerTitle(task: ViewTask) {
 
   if (task.runner?.language === 'html') {
     return 'Живой рендер HTML/CSS'
+  }
+
+  if (isMlTask(task)) {
+    return 'Запуск ML-кода'
   }
 
   return 'Проверка решения'
@@ -544,7 +694,181 @@ function runnerDescription(task: ViewTask) {
     return 'Редактируй HTML/CSS и сразу смотри результат в превью.'
   }
 
+  if (isMlTask(task)) {
+    return 'Пиши свой ML-код, запускай его в браузере и работай с выбранным CSV из папки ml-files.'
+  }
+
   return 'Код выполняется в браузере через Python-интерпретатор.'
+}
+
+function isMlTask(task: ViewTask) {
+  return task.sectionId === 'ml'
+}
+
+function extractMlDatasetName(condition?: string) {
+  const text = (condition ?? '').replace(/\u00a0/g, ' ')
+  return text.match(mlDatasetPattern)?.[1] ?? ''
+}
+
+function currentMlNotebookFileName(task: ViewTask) {
+  const selected = selectedMlNotebookFiles[task.id]
+
+  if (selected && examMlFilesByName[selected]) {
+    return selected
+  }
+
+  const fromCondition = extractMlDatasetName(task.condition)
+
+  if (fromCondition && examMlFilesByName[fromCondition]) {
+    return fromCondition
+  }
+
+  return examMlFileCatalog[0]?.name ?? ''
+}
+
+function mlNotebookSelectedFile(task: ViewTask): ExamMlFileMeta | null {
+  const fileName = currentMlNotebookFileName(task)
+  return examMlFilesByName[fileName] ?? null
+}
+
+function setMlNotebookFile(taskId: string, fileName: string) {
+  if (!examMlFilesByName[fileName]) {
+    return
+  }
+
+  selectedMlNotebookFiles[taskId] = fileName
+}
+
+function mlNotebookFiles(task: ViewTask) {
+  const currentName = currentMlNotebookFileName(task)
+
+  return [...examMlFileCatalog].sort((left, right) => {
+    if (left.name === currentName) {
+      return -1
+    }
+
+    if (right.name === currentName) {
+      return 1
+    }
+
+    return left.name.localeCompare(right.name)
+  })
+}
+
+function formatMlFileSize(sizeBytes: number) {
+  if (sizeBytes >= 1024 * 1024) {
+    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  if (sizeBytes >= 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`
+  }
+
+  return `${sizeBytes} B`
+}
+
+function mlNotebookSummary(task: ViewTask) {
+  const lines = (task.condition ?? '')
+    .replace(/\u00a0/g, ' ')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^Задание\s*№?\s*\d+/iu.test(line))
+    .filter((line) => !/^Данные:/iu.test(line))
+
+  return lines.join(' ')
+}
+
+function mlNotebookSetupCell(task: ViewTask) {
+  const fileName = currentMlNotebookFileName(task) || 'dataset.csv'
+  return `${mlNotebookImports}\n\n# файл для этой задачи\nDATASET_NAME = "${fileName}"\nDATASET_PATH = DATA_DIR / DATASET_NAME`
+}
+
+function mlTaskNumber(task: ViewTask) {
+  const match = task.title.match(/(\d+)/)
+  return match ? Number(match[1]) : 0
+}
+
+function buildMlStarterCode(task: ViewTask) {
+  const taskNumber = mlTaskNumber(task)
+
+  return `def task${taskNumber}():
+    df = pd.read_csv(DATASET_PATH)
+    # напиши решение
+    return df
+`
+}
+
+function mlNotebookRunCell(task: ViewTask) {
+  const taskNumber = mlTaskNumber(task)
+  const fallbackFileName = extractMlDatasetName(task.condition) || 'dataset.csv'
+  const fileName = mlNotebookSelectedFile(task)?.name ?? fallbackFileName
+
+  return `# быстрый прогон\nprint("dataset:", "${fileName}")\nresult = task${taskNumber}()\nif result is not None:\n    print(result.head() if hasattr(result, "head") else result)`
+}
+
+async function loadMlFileText(file: ExamMlFileMeta) {
+  const cached = mlFileTextCache.get(file.name)
+
+  if (cached) {
+    return cached
+  }
+
+  const request = fetch(file.publicUrl)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Не удалось загрузить файл ${file.name}.`)
+      }
+
+      return response.text()
+    })
+    .catch((error) => {
+      mlFileTextCache.delete(file.name)
+      throw error
+    })
+
+  mlFileTextCache.set(file.name, request)
+  return request
+}
+
+async function buildMlRuntimeSetupCode(task: ViewTask) {
+  const file = mlNotebookSelectedFile(task)
+
+  if (!file) {
+    return `${mlNotebookImports}\n\n${mlCommonSetupCode}\n\n${mlxtendCompatSetupCode}`
+  }
+
+  const fileText = await loadMlFileText(file)
+
+  return `${mlNotebookImports}
+
+${mlCommonSetupCode}
+
+${mlxtendCompatSetupCode}
+
+DATA_DIR = Path("./ml-files")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DATASET_NAME = ${JSON.stringify(file.name)}
+DATASET_PATH = DATA_DIR / DATASET_NAME
+DATASET_PATH.write_text(${JSON.stringify(fileText)}, encoding="utf-8")
+`
+}
+
+async function buildPythonRunOptions(task: ViewTask): Promise<PythonRunOptions> {
+  const runner = getPythonRunner(task)
+  const options: PythonRunOptions = {
+    stdin: stdinDrafts[task.id] ?? '',
+    setupCode: runner?.setupCode,
+  }
+
+  if (!isMlTask(task)) {
+    return options
+  }
+
+  const runtimeSetup = await buildMlRuntimeSetupCode(task)
+  options.setupCode = [runner?.setupCode, runtimeSetup].filter(Boolean).join('\n\n')
+
+  return options
 }
 
 function sqlScenario(task: ViewTask) {
@@ -603,6 +927,10 @@ function formatRowsLabel(count: number) {
 
 function formatFieldsLabel(count: number) {
   return `${count} ${formatCountWord(count, 'поле', 'поля', 'полей')}`
+}
+
+function formatPlotsLabel(count: number) {
+  return `${count} ${formatCountWord(count, 'график', 'графика', 'графиков')}`
 }
 
 function formatResultsLabel(count: number) {
@@ -771,12 +1099,14 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
       message: 'Если Python запускается впервые, браузер может подгружать интерпретатор несколько секунд.',
     }
 
-    const result = await runPythonCode(buildPythonExecutionCode(task), {
-      stdin: stdinDrafts[task.id] ?? '',
-      setupCode: runner.setupCode,
-    })
+    const executionCode = buildPythonExecutionCode(task, mode)
+    const usedExampleCode = pythonExecutionUsesExample(task, executionCode)
+    const result = await runPythonCode(executionCode, await buildPythonRunOptions(task))
+    const parsedOutput = parsePythonRunOutput(result.stdout)
+    const parsedStdout = parsedOutput.stdout
+    const plotImages = parsedOutput.plotImages
 
-    const normalizedStdout = normalizeOutput(result.stdout)
+    const normalizedStdout = normalizeOutput(parsedStdout)
     const expectedOutput = runner.expectedStdout ? normalizeOutput(runner.expectedStdout) : ''
 
     if (mode === 'check' && runner.expectedStdout) {
@@ -789,7 +1119,8 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
         message: isCorrect
           ? 'Вывод совпал с ожидаемым результатом.'
           : 'Фактический вывод не совпал с ожидаемым. Сверь код, входные данные и формат печати.',
-        stdout: result.stdout,
+        stdout: parsedStdout,
+        plotImages,
         stderr: result.stderr,
         expectedText: runner.expectedStdout,
         solutionPreview: buildSolutionPreview(task.solution),
@@ -801,8 +1132,9 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
     runStates[task.id] = {
       tone: result.status === 'ok' ? 'success' : 'error',
       title: result.status === 'ok' ? 'Код запущен' : 'Ошибка выполнения',
-      message: buildPythonRunMessage(task, result.stdout, result.stderr),
-      stdout: result.stdout,
+      message: buildPythonRunMessage(result.status, parsedStdout, result.stderr, usedExampleCode, plotImages.length),
+      stdout: parsedStdout,
+      plotImages,
       stderr: result.stderr,
     }
   } finally {
@@ -857,7 +1189,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
       <div>
         <p class="task-overview__eyebrow">{{ taskCatalog.label }}</p>
         <h2>{{ activeSection.title }}</h2>
-        <p class="muted">{{ activeSection.description }}</p>
+        <p class="muted">{{ activeSectionDescription }}</p>
       </div>
 
       <div class="task-summary">
@@ -872,7 +1204,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
       show-icon
       :closable="false"
       title="Как пользоваться"
-      :description="taskCatalog.helpText"
+      :description="taskCatalogHelpText"
     />
 
     <div v-if="activeSection" class="section-stack tasks-stack">
@@ -913,8 +1245,11 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 
             <div v-if="!task.runner" class="task-card__block task-card__block--note">
               <p class="muted">
-                Для этого раздела оставил условие и готовое решение. Запуск в браузере сейчас есть для Python,
-                алгоритмов, SQL и Web.
+                {{
+                  isMlTask(task)
+                    ? 'Для ML оставил условие, готовое решение и тетрадь в стиле Jupyter с файлами датасетов.'
+                    : 'Для этого раздела оставил условие и готовое решение. Запуск в браузере сейчас есть для Python, алгоритмов, SQL и Web.'
+                }}
               </p>
             </div>
           </div>
@@ -932,7 +1267,148 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
           </div>
 
           <div v-if="activeTaskPanels[task.id] === 'solution' || !task.runner" class="task-card__panel">
-            <div class="task-card__block">
+            <div v-if="isMlTask(task)" class="task-card__block task-card__block--ml-notebook">
+              <div class="ml-notebook">
+                <div class="ml-notebook__topbar">
+                  <div>
+                    <p class="ml-notebook__eyebrow">Jupyter ML</p>
+                    <strong>{{ task.title }}.ipynb</strong>
+                  </div>
+                  <div class="ml-notebook__status">
+                    <span class="ml-notebook__status-dot" />
+                    <span>Python 3</span>
+                  </div>
+                </div>
+
+                <div class="ml-notebook__workspace">
+                  <aside class="ml-notebook__files">
+                    <div class="ml-notebook__files-header">
+                      <p class="ml-notebook__eyebrow">Files</p>
+                      <h3>Датасеты</h3>
+                    </div>
+
+                    <div class="ml-notebook__file-list">
+                      <button
+                        v-for="file in mlNotebookFiles(task)"
+                        :key="`${task.id}-${file.name}`"
+                        type="button"
+                        class="ml-notebook__file-button"
+                        :class="{ 'is-active': currentMlNotebookFileName(task) === file.name }"
+                        @click="setMlNotebookFile(task.id, file.name)"
+                      >
+                        <span class="ml-notebook__file-name">{{ file.name }}</span>
+                        <span class="ml-notebook__file-meta">
+                          {{ formatRowsLabel(file.rowCount) }} / {{ formatFieldsLabel(file.columns.length) }}
+                        </span>
+                      </button>
+                    </div>
+                  </aside>
+
+                  <div class="ml-notebook__cells">
+                    <article class="ml-notebook__cell ml-notebook__cell--markdown">
+                      <div class="ml-notebook__prompt">Md</div>
+                      <div class="ml-notebook__cell-body">
+                        <p class="ml-notebook__cell-label">Задание {{ mlTaskNumber(task) }}</p>
+                        <div class="ml-notebook__summary">
+                          <p>{{ mlNotebookSummary(task) }}</p>
+                          <div class="ml-notebook__output-tags">
+                            <el-tag effect="plain" type="success">{{ currentMlNotebookFileName(task) }}</el-tag>
+                            <el-tag effect="plain">{{ formatRowsLabel(mlNotebookSelectedFile(task)?.rowCount ?? 0) }}</el-tag>
+                            <el-tag effect="plain">{{ formatFieldsLabel(mlNotebookSelectedFile(task)?.columns.length ?? 0) }}</el-tag>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+
+                    <article class="ml-notebook__cell ml-notebook__cell--code">
+                      <div class="ml-notebook__prompt">In [1]</div>
+                      <div class="ml-notebook__cell-body">
+                        <p class="ml-notebook__cell-label">Подключение библиотек и файла</p>
+                        <pre class="ml-notebook__code"><code>{{ mlNotebookSetupCell(task) }}</code></pre>
+                      </div>
+                    </article>
+
+                    <article class="ml-notebook__cell ml-notebook__cell--code">
+                      <div class="ml-notebook__prompt">In [2]</div>
+                      <div class="ml-notebook__cell-body">
+                        <p class="ml-notebook__cell-label">{{ task.sourceLabel }}</p>
+                        <pre class="ml-notebook__code"><code>{{ task.solution }}</code></pre>
+                      </div>
+                    </article>
+
+                    <article class="ml-notebook__cell ml-notebook__cell--code">
+                      <div class="ml-notebook__prompt">In [3]</div>
+                      <div class="ml-notebook__cell-body">
+                        <p class="ml-notebook__cell-label">Быстрый прогон результата</p>
+                        <pre class="ml-notebook__code"><code>{{ mlNotebookRunCell(task) }}</code></pre>
+                      </div>
+                    </article>
+
+                    <article v-if="mlNotebookSelectedFile(task)" class="ml-notebook__cell ml-notebook__cell--output">
+                      <div class="ml-notebook__prompt">Out[3]</div>
+                      <div class="ml-notebook__cell-body">
+                        <div class="ml-notebook__output-header">
+                          <div>
+                            <p class="ml-notebook__cell-label">Файл для этой задачи</p>
+                            <div class="ml-notebook__output-tags">
+                              <el-tag effect="plain" type="success">{{ currentMlNotebookFileName(task) }}</el-tag>
+                              <el-tag effect="plain">{{ formatRowsLabel(mlNotebookSelectedFile(task)?.rowCount ?? 0) }}</el-tag>
+                              <el-tag effect="plain">{{ formatFieldsLabel(mlNotebookSelectedFile(task)?.columns.length ?? 0) }}</el-tag>
+                            </div>
+                          </div>
+
+                          <div class="ml-notebook__output-actions">
+                            <span class="ml-notebook__file-size">{{ formatMlFileSize(mlNotebookSelectedFile(task)?.sizeBytes ?? 0) }}</span>
+                            <a
+                              class="ml-notebook__file-link"
+                              :href="mlNotebookSelectedFile(task)?.publicUrl"
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Открыть файл
+                            </a>
+                          </div>
+                        </div>
+
+                        <div class="ml-notebook__columns">
+                          <span
+                            v-for="column in mlNotebookSelectedFile(task)?.columns ?? []"
+                            :key="`${task.id}-${column}`"
+                            class="ml-notebook__column-chip"
+                          >
+                            {{ column }}
+                          </span>
+                        </div>
+
+                        <div class="table-shell ml-notebook__table-shell">
+                          <table class="task-table">
+                            <thead>
+                              <tr>
+                                <th v-for="column in mlNotebookSelectedFile(task)?.columns ?? []" :key="`${task.id}-head-${column}`">
+                                  {{ column }}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr
+                                v-for="(row, rowIndex) in mlNotebookSelectedFile(task)?.previewRows ?? []"
+                                :key="`${task.id}-row-${rowIndex}`"
+                              >
+                                <td v-for="(cell, cellIndex) in row" :key="`${task.id}-cell-${rowIndex}-${cellIndex}`">
+                                  {{ cell }}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="task-card__block">
               <h3>{{ task.sourceLabel }}</h3>
               <pre class="task-code task-code--solution"><code>{{ task.solution }}</code></pre>
             </div>
@@ -979,6 +1455,36 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                   Этот блок автоматически добавляется при проверке, если ты не вставил его в редактор сам.
                 </p>
                 <pre class="task-code"><code>{{ pythonExampleCode(task) }}</code></pre>
+              </div>
+
+              <div v-if="isMlTask(task) && mlNotebookSelectedFile(task)" class="task-card__block">
+                <div class="ml-runner__header">
+                  <div>
+                    <h3>Файл для запуска</h3>
+                    <p class="muted">Выбери датасет, который нужно подложить в папку `ml-files` для этого запуска.</p>
+                  </div>
+                  <div class="ml-notebook__output-tags">
+                    <el-tag effect="plain" type="success">{{ currentMlNotebookFileName(task) }}</el-tag>
+                    <el-tag effect="plain">{{ formatRowsLabel(mlNotebookSelectedFile(task)?.rowCount ?? 0) }}</el-tag>
+                    <el-tag effect="plain">{{ formatFieldsLabel(mlNotebookSelectedFile(task)?.columns.length ?? 0) }}</el-tag>
+                  </div>
+                </div>
+
+                <div class="ml-runner__files">
+                  <button
+                    v-for="file in mlNotebookFiles(task)"
+                    :key="`${task.id}-runner-${file.name}`"
+                    type="button"
+                    class="ml-notebook__file-button"
+                    :class="{ 'is-active': currentMlNotebookFileName(task) === file.name }"
+                    @click="setMlNotebookFile(task.id, file.name)"
+                  >
+                    <span class="ml-notebook__file-name">{{ file.name }}</span>
+                    <span class="ml-notebook__file-meta">
+                      {{ formatRowsLabel(file.rowCount) }} / {{ formatFieldsLabel(file.columns.length) }}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               <div class="task-card__block" :class="{ 'task-card__block--sql-editor': Boolean(getSqlRunner(task)) }">
@@ -1066,6 +1572,7 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                 <div class="task-editor__header">
                   <h3 v-if="getSqlRunner(task)">Твой SQL</h3>
                   <h3 v-else-if="getHtmlRunner(task)">Твой HTML/CSS</h3>
+                  <h3 v-else-if="isMlTask(task)">Твой ML-код</h3>
                   <h3 v-else>Твой код</h3>
 
                   <div class="button-row task-editor__actions">
@@ -1190,6 +1697,22 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
                         </tr>
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                <div v-if="(runStates[task.id]?.plotImages?.length ?? 0) > 0" class="task-card__block">
+                  <div class="task-table__header">
+                    <h3>Графики</h3>
+                    <el-tag effect="plain">{{ formatPlotsLabel(runStates[task.id]?.plotImages?.length ?? 0) }}</el-tag>
+                  </div>
+                  <div class="task-plot-grid">
+                    <figure
+                      v-for="(plotImage, plotIndex) in runStates[task.id]?.plotImages ?? []"
+                      :key="`${task.id}-plot-${plotIndex}`"
+                      class="task-plot"
+                    >
+                      <img :src="plotImage" :alt="`График ${plotIndex + 1}`" class="task-plot__image" />
+                    </figure>
                   </div>
                 </div>
 
@@ -1398,6 +1921,324 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 
 .task-code--error {
   color: #ffd6d6;
+}
+
+.task-card__block--ml-notebook {
+  margin-top: 2px;
+}
+
+.ml-notebook {
+  display: grid;
+  gap: 0;
+  border: 1px solid rgba(154, 169, 196, 0.2);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(33, 40, 55, 0.98) 0%, rgba(17, 22, 32, 0.99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 36px rgba(4, 8, 18, 0.28);
+  overflow: hidden;
+}
+
+.ml-notebook__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(154, 169, 196, 0.16);
+  background: linear-gradient(180deg, rgba(55, 63, 80, 0.98) 0%, rgba(38, 45, 60, 0.99) 100%);
+  color: #eef4ff;
+}
+
+.ml-notebook__eyebrow {
+  margin: 0 0 6px;
+  color: rgba(180, 200, 226, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ml-notebook__topbar strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ml-notebook__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(117, 201, 145, 0.2);
+  border-radius: 999px;
+  background: rgba(33, 55, 41, 0.54);
+  color: #dff8e7;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ml-notebook__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6ce39f;
+  box-shadow: 0 0 0 4px rgba(108, 227, 159, 0.12);
+}
+
+.ml-notebook__workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+  min-height: 640px;
+}
+
+.ml-notebook__files {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px 14px;
+  border-right: 1px solid rgba(154, 169, 196, 0.14);
+  background: rgba(14, 20, 29, 0.92);
+}
+
+.ml-notebook__files-header {
+  display: grid;
+  gap: 4px;
+}
+
+.ml-notebook__files-header h3 {
+  margin: 0;
+  color: #eef4ff;
+  font-size: 16px;
+}
+
+.ml-notebook__file-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ml-notebook__file-button {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid rgba(154, 169, 196, 0.14);
+  border-radius: 10px;
+  background: rgba(33, 42, 57, 0.56);
+  color: #edf2fb;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.ml-notebook__file-button:hover {
+  border-color: rgba(115, 176, 255, 0.34);
+  background: rgba(46, 58, 78, 0.8);
+  transform: translateY(-1px);
+}
+
+.ml-notebook__file-button.is-active {
+  border-color: rgba(103, 182, 255, 0.54);
+  background: linear-gradient(180deg, rgba(39, 84, 138, 0.76) 0%, rgba(29, 53, 92, 0.88) 100%);
+  box-shadow: inset 0 0 0 1px rgba(176, 222, 255, 0.12);
+}
+
+.ml-notebook__file-name {
+  color: #f6f9ff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.ml-notebook__file-meta {
+  color: rgba(211, 221, 235, 0.72);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ml-notebook__cells {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 18px;
+  min-width: 0;
+  background: rgba(8, 12, 19, 0.34);
+}
+
+.ml-notebook__cell {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.ml-notebook__prompt {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: 12px;
+  min-width: 0;
+  color: rgba(164, 189, 224, 0.84);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+}
+
+.ml-notebook__cell-body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid rgba(154, 169, 196, 0.14);
+  border-radius: 12px;
+}
+
+.ml-notebook__cell--markdown .ml-notebook__cell-body {
+  background: rgba(20, 29, 44, 0.96);
+}
+
+.ml-notebook__cell--code .ml-notebook__cell-body {
+  background: rgba(10, 15, 25, 0.96);
+}
+
+.ml-notebook__cell--output .ml-notebook__cell-body {
+  background: rgba(11, 18, 27, 0.96);
+}
+
+.ml-notebook__cell-label {
+  margin: 0;
+  color: #dae7fb;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.ml-notebook__summary {
+  display: grid;
+  gap: 12px;
+}
+
+.ml-notebook__summary p {
+  margin: 0;
+  color: #eef3ff;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.ml-notebook__code {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(128, 169, 218, 0.12);
+  border-radius: 10px;
+  background: rgba(5, 9, 16, 0.88);
+  color: #f4f7ff;
+  font-size: 13px;
+  line-height: 1.65;
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.ml-notebook__output-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ml-notebook__output-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ml-notebook__output-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.ml-notebook__file-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(121, 189, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(29, 56, 93, 0.76);
+  color: #e9f4ff;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ml-notebook__file-link:hover {
+  border-color: rgba(148, 205, 255, 0.34);
+  background: rgba(36, 66, 108, 0.92);
+}
+
+.ml-notebook__file-size {
+  color: rgba(198, 208, 221, 0.76);
+  font-size: 12px;
+  line-height: 1.4;
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+}
+
+.ml-notebook__columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ml-notebook__column-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(128, 169, 218, 0.22);
+  border-radius: 999px;
+  background: rgba(27, 43, 63, 0.72);
+  color: #d9e8ff;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ml-notebook__table-shell {
+  max-height: none;
+  background: rgba(7, 11, 18, 0.56);
+  border-color: rgba(154, 169, 196, 0.14);
+}
+
+.ml-notebook__table-shell td {
+  word-break: break-word;
+}
+
+.ml-runner__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.ml-runner__header h3 {
+  margin: 0 0 8px;
+}
+
+.ml-runner__files {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
 }
 
 .task-runner {
@@ -1755,6 +2596,29 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   box-shadow: 0 0 0 1px rgba(72, 116, 255, 0.28);
 }
 
+.task-plot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.task-plot {
+  margin: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: white;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.task-plot__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: white;
+}
+
 .task-preview {
   width: 100%;
   min-height: 320px;
@@ -1814,7 +2678,10 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
 
   .sql-reference__header,
   .sql-browser__viewer-header,
-  .task-table__header {
+  .task-table__header,
+  .ml-runner__header,
+  .ml-notebook__topbar,
+  .ml-notebook__output-header {
     display: grid;
   }
 
@@ -1835,6 +2702,29 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
     border-bottom: 1px solid rgba(154, 169, 196, 0.14);
   }
 
+  .ml-notebook__workspace {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .ml-notebook__files {
+    border-right: 0;
+    border-bottom: 1px solid rgba(154, 169, 196, 0.14);
+  }
+
+  .ml-notebook__cell {
+    grid-template-columns: 1fr;
+  }
+
+  .ml-notebook__prompt {
+    justify-content: flex-start;
+    padding-top: 0;
+  }
+
+  .ml-notebook__output-actions {
+    justify-items: start;
+  }
+
   .task-editor__actions {
     justify-content: flex-start;
   }
@@ -1844,3 +2734,8 @@ async function executeTask(task: ViewTask, mode: 'run' | 'check') {
   }
 }
 </style>
+
+
+
+
+

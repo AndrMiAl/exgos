@@ -532,13 +532,13 @@ export const geTaskRunners: Record<string, GeTaskRunner> = {
   'ML/ex2_AnomalyDetection.py': {
     language: 'python',
     setupCode: anomalyDetectionSetupCode,
-    note: 'Для запуска уже подложен учебный DataFrame вместо файла `loco_11_corr.tsv`, а графики заменены на текстовую отметку.',
+    note: 'Для запуска уже подложен учебный DataFrame вместо файла `loco_11_corr.tsv`, а построенные графики появляются ниже в результате.',
     starterCode: emptyStarter,
   },
   'ML/ex3_clusterization.py': {
     language: 'python',
     setupCode: clusterizationSetupCode,
-    note: 'Для запуска уже подложен учебный Excel-набор пассажиров, а графики выводятся как отметка о построении.',
+    note: 'Для запуска уже подложен учебный Excel-набор пассажиров, а построенные графики появляются ниже в результате.',
     starterCode: emptyStarter,
   },
   'SQL/ex1_seatsAD.txt': {
