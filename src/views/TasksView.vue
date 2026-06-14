@@ -846,11 +846,40 @@ ${mlCommonSetupCode}
 
 ${mlxtendCompatSetupCode}
 
+from io import StringIO
+
 DATA_DIR = Path("./ml-files")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATASET_NAME = ${JSON.stringify(file.name)}
 DATASET_PATH = DATA_DIR / DATASET_NAME
-DATASET_PATH.write_text(${JSON.stringify(fileText)}, encoding="utf-8")
+DATASET_TEXT = ${JSON.stringify(fileText)}
+DATASET_PATH.write_text(DATASET_TEXT, encoding="utf-8")
+
+if not hasattr(pd, "_codex_original_read_csv"):
+    pd._codex_original_read_csv = pd.read_csv
+
+def _codex_read_csv(path_or_buffer, *args, **kwargs):
+    path_text = str(path_or_buffer)
+    target_name = Path(path_text).name
+
+    if path_text == str(DATASET_PATH) or target_name == DATASET_NAME:
+        if DATASET_NAME == "market_basket.csv":
+            rows = [line for line in DATASET_TEXT.splitlines() if line.strip()]
+            column_names = kwargs.get("names")
+
+            if isinstance(column_names, (list, tuple)) and len(column_names) > 0:
+                return pd.DataFrame({column_names[0]: rows})
+
+            if kwargs.get("header", "infer") is None:
+                return pd.DataFrame(rows)
+
+            return pd.DataFrame({"items": rows})
+
+        return pd._codex_original_read_csv(StringIO(DATASET_TEXT), *args, **kwargs)
+
+    return pd._codex_original_read_csv(path_or_buffer, *args, **kwargs)
+
+pd.read_csv = _codex_read_csv
 `
 }
 
