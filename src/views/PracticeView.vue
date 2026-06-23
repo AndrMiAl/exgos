@@ -40,6 +40,7 @@ let mobileViewportQuery: MediaQueryList | null = null
 let mobileViewportHandler: ((event: MediaQueryListEvent) => void) | null = null
 
 const stateExamPdfScope = getQuestionScopePreset(STATE_EXAM_2026_PDFS_SCOPE_ID)
+const memoryQuizUrl = `${import.meta.env.BASE_URL}practice/`
 
 interface QuestionPoolSummary {
   totalQuestions: number
@@ -1243,6 +1244,15 @@ watch(
       </div>
     </div>
 
+    <section v-if="!workingAttempt" class="memory-quiz-entry">
+      <div class="memory-quiz-entry__copy">
+        <p class="eyebrow">Memory Quiz</p>
+        <h2>Быстрый тренажер ответов</h2>
+        <p>Откройте отдельную страницу для быстрого повторения вопросов и закрепления правильных ответов.</p>
+      </div>
+      <a class="memory-quiz-entry__link" :href="memoryQuizUrl">Открыть тренажер</a>
+    </section>
+
     <el-card v-if="!workingAttempt" shadow="never" class="setup-card">
       <div class="knowledge-hero">
         <div class="knowledge-hero__content">
@@ -2045,6 +2055,56 @@ watch(
   max-width: 760px;
   margin-top: 10px;
   color: var(--practice-muted);
+}
+
+.memory-quiz-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 20px 22px;
+  border: 1px solid var(--practice-border);
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, var(--practice-panel-bg) 100%);
+  box-shadow: 0 18px 38px var(--practice-shadow);
+}
+
+.memory-quiz-entry__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.memory-quiz-entry__copy h2 {
+  margin: 0;
+  color: var(--practice-text-strong);
+  font-size: 24px;
+}
+
+.memory-quiz-entry__copy p:last-child {
+  margin: 0;
+  max-width: 720px;
+  color: var(--practice-muted);
+  line-height: 1.6;
+}
+
+.memory-quiz-entry__link {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.28);
+}
+
+.memory-quiz-entry__link:hover {
+  background: #1d4ed8;
 }
 
 .setup-card {

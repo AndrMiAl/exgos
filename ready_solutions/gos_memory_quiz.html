@@ -254,6 +254,32 @@
     }
     .feedback.good { color: var(--green); }
     .feedback.bad { color: var(--red); }
+    .success-sticker {
+      display: grid;
+      justify-items: center;
+      gap: 14px;
+      padding: 20px 18px 24px;
+      border-radius: 18px;
+      border: 1px solid rgba(65,211,154,.36);
+      background: linear-gradient(180deg, rgba(65,211,154,.16), rgba(255,255,255,.03));
+      text-align: center;
+    }
+    .success-sticker__title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--green);
+    }
+    .success-sticker__text {
+      max-width: 480px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .success-sticker img {
+      width: min(280px, 100%);
+      height: auto;
+      border-radius: 18px;
+      box-shadow: 0 16px 34px rgba(0,0,0,.28);
+    }
     @media (max-width: 1100px) {
       .app { grid-template-columns: 1fr; }
       .sidebar { position: static; }
@@ -762,6 +788,17 @@
       return { correct, answered, total: block.questions.length };
     }
 
+    function isBlockPerfect(block) {
+      const score = getBlockScore(block);
+      const cmdState = ensureBlockState(block.id).__command;
+      return Boolean(
+        cmdState?.correct &&
+        score.total > 0 &&
+        score.answered === score.total &&
+        score.correct === score.total
+      );
+    }
+
     function renderBlockList() {
       const root = document.getElementById("blockList");
       root.innerHTML = quizData.map((block) => {
@@ -816,10 +853,55 @@
       return optionOrders[blockId][qIndex];
     }
 
+    function getBalancedOptionText(question, option, optionIndex, qIndex) {
+      if (optionIndex === question.correct) {
+        return option;
+      }
+
+      if (option.length <= 18) {
+        return option;
+      }
+
+      const variants = [
+        (text) => text,
+        (text) => text.replace(/^Какую\s/i, "Какая "),
+        (text) => text.replace(/^Какая\s/i, "Какую "),
+        (text) => text.replace(/^Статическую\s/i, "Типизацию статическую "),
+        (text) => text.replace(/^Функциональную\s/i, "Функциональную модель "),
+        (text) => text.replace(/^Многопоточность\s/i, "Подход с многопоточностью "),
+        (text) => text.replace(/^Динамическое\s/i, "Динамический подход "),
+      ];
+
+      const mode = Math.floor(Date.now() / 1200);
+      const variantIndex = (mode + qIndex + optionIndex) % variants.length;
+      return variants[variantIndex](option) || option;
+    }
+
+    function equalizeOptionHeights(root) {
+      root.querySelectorAll(".options").forEach((optionsNode) => {
+        const buttons = [...optionsNode.querySelectorAll(".option")];
+        buttons.forEach((button) => {
+          button.style.minHeight = "";
+        });
+        const maxHeight = buttons.reduce((max, button) => Math.max(max, button.offsetHeight), 0);
+        if (!maxHeight) return;
+        buttons.forEach((button) => {
+          button.style.minHeight = `${maxHeight}px`;
+        });
+      });
+    }
+
     function renderQuestions(block) {
       const blockState = ensureBlockState(block.id);
       const root = document.getElementById("questions");
       const cmdState = blockState.__command || null;
+      const successSticker = isBlockPerfect(block) ? `
+        <section class="success-sticker">
+          <div class="success-sticker__title">Идеально. Все решено правильно.</div>
+          <div class="success-sticker__text">Блок закрыт без ошибок. Можно спокойно переходить дальше.</div>
+          <img src="success-sticker.png" alt="Стикер за идеальный результат">
+        </section>
+      ` : "";
       root.innerHTML = `
         <section class="input-card ${cmdState ? (cmdState.correct ? "good" : "bad") : ""}">
           <div class="q-top">
@@ -850,6 +932,7 @@
             <div class="options">
               ${optionOrder.map((originalIndex) => {
                 const option = question.options[originalIndex];
+                const optionText = getBalancedOptionText(question, option, originalIndex, qIndex);
                 const isCorrect = originalIndex === question.correct;
                 const wasClicked = saved && (saved.selectedText === option || saved.selected === originalIndex);
                 let cls = "";
@@ -857,7 +940,7 @@
                   if (isCorrect) cls = "correct";
                   if (wasClicked && !saved.correct) cls = "wrong";
                 }
-                return `<button class="option ${cls}" data-question-index="${qIndex}" data-option-index="${originalIndex}">${escapeHtml(option)}</button>`;
+                return `<button class="option ${cls}" data-question-index="${qIndex}" data-option-index="${originalIndex}">${escapeHtml(optionText)}</button>`;
               }).join("")}
             </div>
             <div class="feedback ${saved ? (saved.correct ? "good" : "bad") : ""}">
@@ -865,7 +948,7 @@
             </div>
           </section>
         `;
-      }).join("");
+      }).join("") + successSticker;
 
       const input = document.getElementById("commandInput");
       const checkBtn = document.getElementById("checkCommandBtn");
@@ -898,6 +981,8 @@
           render();
         });
       });
+
+      equalizeOptionHeights(root);
     }
 
     function normalizeCommand(text) {
