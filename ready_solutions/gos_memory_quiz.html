@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
@@ -254,6 +254,39 @@
     }
     .feedback.good { color: var(--green); }
     .feedback.bad { color: var(--red); }
+    .question-mode-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(124,152,219,.14);
+      background: rgba(255,255,255,.02);
+    }
+    .question-mode-meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .question-mode-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .mode-btn {
+      border: 1px solid rgba(124,152,219,.18);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .mode-btn.active {
+      background: rgba(97,169,255,.14);
+      border-color: rgba(97,169,255,.42);
+    }
     .success-sticker {
       display: grid;
       justify-items: center;
@@ -750,11 +783,20 @@
     let currentBlockId = quizData[0].id;
     let state = loadState();
     let optionOrders = {};
+    let transientCommandState = {};
+    let questionViewMode = "single";
+    let questionCursorByBlock = {};
 
     function loadState() {
       try {
         const raw = localStorage.getItem(storageKey);
-        return raw ? JSON.parse(raw) : {};
+        const parsed = raw ? JSON.parse(raw) : {};
+        Object.values(parsed).forEach((blockState) => {
+          if (blockState && typeof blockState === "object" && "__command" in blockState) {
+            delete blockState.__command;
+          }
+        });
+        return parsed;
       } catch {
         return {};
       }
@@ -790,13 +832,21 @@
 
     function isBlockPerfect(block) {
       const score = getBlockScore(block);
-      const cmdState = ensureBlockState(block.id).__command;
+      const cmdState = transientCommandState[block.id];
       return Boolean(
         cmdState?.correct &&
         score.total > 0 &&
         score.answered === score.total &&
         score.correct === score.total
       );
+    }
+
+    function getQuestionCursor(blockId, total) {
+      if (!(blockId in questionCursorByBlock)) {
+        questionCursorByBlock[blockId] = 0;
+      }
+      questionCursorByBlock[blockId] = Math.max(0, Math.min(questionCursorByBlock[blockId], Math.max(0, total - 1)));
+      return questionCursorByBlock[blockId];
     }
 
     function renderBlockList() {
@@ -894,7 +944,12 @@
     function renderQuestions(block) {
       const blockState = ensureBlockState(block.id);
       const root = document.getElementById("questions");
-      const cmdState = blockState.__command || null;
+      const cmdState = transientCommandState[block.id] || null;
+      const questionCursor = getQuestionCursor(block.id, block.questions.length);
+      const visibleQuestions =
+        questionViewMode === "single"
+          ? block.questions.map((question, qIndex) => ({ question, qIndex })).filter(({ qIndex }) => qIndex === questionCursor)
+          : block.questions.map((question, qIndex) => ({ question, qIndex }));
       const successSticker = isBlockPerfect(block) ? `
         <section class="success-sticker">
           <div class="success-sticker__title">Идеально. Все решено правильно.</div>
@@ -903,6 +958,16 @@
         </section>
       ` : "";
       root.innerHTML = `
+        <section class="question-mode-bar">
+          <div class="question-mode-meta">
+            ${questionViewMode === "single" ? `Сейчас показывается вопрос ${questionCursor + 1} из ${block.questions.length}` : `Сейчас показываются все вопросы блока: ${block.questions.length}`}
+          </div>
+          <div class="question-mode-actions">
+            <button class="mode-btn ${questionViewMode === "single" ? "active" : ""}" id="singleModeBtn">По одному</button>
+            <button class="mode-btn ${questionViewMode === "all" ? "active" : ""}" id="allModeBtn">Все сразу</button>
+            ${questionViewMode === "single" ? `<button class="mode-btn" id="prevQuestionBtn">Назад</button><button class="mode-btn" id="nextQuestionBtn">Дальше</button>` : ""}
+          </div>
+        </section>
         <section class="input-card ${cmdState ? (cmdState.correct ? "good" : "bad") : ""}">
           <div class="q-top">
             <div class="q-num">Практика</div>
@@ -910,14 +975,14 @@
           </div>
           <div class="input-label">Введи команду, которая отправит в GPT слово <b>привет</b> через твой endpoint.</div>
           <div class="input-row">
-            <input class="cmd-input" id="commandInput" placeholder='Введите' value="${cmdState ? escapeAttr(cmdState.value) : ""}">
+            <input class="cmd-input" id="commandInput" name="command_no_memory_${block.id}" placeholder='Введите' value="${cmdState ? escapeAttr(cmdState.value) : ""}" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false">
             <button class="cmd-check" id="checkCommandBtn">Проверить</button>
           </div>
           <div class="feedback ${cmdState ? (cmdState.correct ? "good" : "bad") : ""}" id="commandFeedback">
             ${cmdState ? (cmdState.correct ? "Да, это правильная команда." : escapeHtml(getCommandHint(cmdState.value))) : ""}
           </div>
         </section>
-      ` + block.questions.map((question, qIndex) => {
+      ` + visibleQuestions.map(({ question, qIndex }) => {
         const saved = blockState[qIndex];
         const doneClass = saved ? (saved.correct ? "done-good" : "done-bad") : "";
         const badge = question.source === "notes" ? "по заметкам" : question.source === "generated" ? "достроено" : "";
@@ -952,13 +1017,36 @@
 
       const input = document.getElementById("commandInput");
       const checkBtn = document.getElementById("checkCommandBtn");
+      const singleModeBtn = document.getElementById("singleModeBtn");
+      const allModeBtn = document.getElementById("allModeBtn");
+      const prevQuestionBtn = document.getElementById("prevQuestionBtn");
+      const nextQuestionBtn = document.getElementById("nextQuestionBtn");
       const check = () => {
         const value = input.value.trim();
         const correct = isCommandCorrect(value);
-        ensureBlockState(block.id).__command = { value, correct };
-        saveState();
+        transientCommandState[block.id] = { value, correct };
         render();
       };
+      singleModeBtn.addEventListener("click", () => {
+        questionViewMode = "single";
+        render();
+      });
+      allModeBtn.addEventListener("click", () => {
+        questionViewMode = "all";
+        render();
+      });
+      if (prevQuestionBtn) {
+        prevQuestionBtn.addEventListener("click", () => {
+          questionCursorByBlock[block.id] = Math.max(0, getQuestionCursor(block.id, block.questions.length) - 1);
+          render();
+        });
+      }
+      if (nextQuestionBtn) {
+        nextQuestionBtn.addEventListener("click", () => {
+          questionCursorByBlock[block.id] = Math.min(block.questions.length - 1, getQuestionCursor(block.id, block.questions.length) + 1);
+          render();
+        });
+      }
       checkBtn.addEventListener("click", check);
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -978,6 +1066,9 @@
             correct: optIndex === q.correct
           };
           saveState();
+          if (questionViewMode === "single" && qIndex < block.questions.length - 1) {
+            questionCursorByBlock[block.id] = qIndex + 1;
+          }
           render();
         });
       });
@@ -1051,6 +1142,8 @@
     document.getElementById("resetBlockBtn").addEventListener("click", () => {
       state[currentBlockId] = {};
       delete optionOrders[currentBlockId];
+      delete transientCommandState[currentBlockId];
+      questionCursorByBlock[currentBlockId] = 0;
       saveState();
       render();
     });
@@ -1058,6 +1151,8 @@
     document.getElementById("resetAllBtn").addEventListener("click", () => {
       state = {};
       optionOrders = {};
+      transientCommandState = {};
+      questionCursorByBlock = {};
       saveState();
       render();
     });
@@ -1073,3 +1168,4 @@
   </script>
 </body>
 </html>
+
