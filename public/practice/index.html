@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Госы: тренажер памяти</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c1222;
+      --panel: #121a30;
+      --panel-2: #182342;
+      --line: #2a3a66;
+      --text: #edf3ff;
+      --muted: #98a8d3;
+      --green: #41d39a;
+      --red: #ff6d8d;
+      --blue: #61a9ff;
+      --yellow: #ffbf52;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(97,169,255,.14), transparent 28%),
+        radial-gradient(circle at top right, rgba(65,211,154,.10), transparent 24%),
+        var(--bg);
+      color: var(--text);
+    }
+    .app {
+      width: min(1440px, calc(100% - 28px));
+      margin: 18px auto 28px;
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      gap: 16px;
+    }
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      border: 1px solid rgba(124,152,219,.18);
+      border-radius: 16px;
+      box-shadow: 0 16px 36px rgba(0,0,0,.24);
+    }
+    .sidebar {
+      padding: 16px;
+      position: sticky;
+      top: 18px;
+      align-self: start;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+    }
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .block-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .block-btn {
+      width: 100%;
+      border: 1px solid rgba(124,152,219,.18);
+      background: rgba(255,255,255,.02);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 12px 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .block-btn.active {
+      background: rgba(97,169,255,.12);
+      border-color: rgba(97,169,255,.45);
+    }
+    .block-btn .title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .block-btn .meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .side-actions {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .ghost-btn, .primary-btn {
+      border-radius: 12px;
+      border: 1px solid rgba(124,152,219,.18);
+      padding: 11px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .ghost-btn { background: rgba(255,255,255,.03); }
+    .primary-btn { background: rgba(65,211,154,.14); }
+    .content {
+      padding: 18px;
+    }
+    .head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+    .head h2 {
+      margin: 0;
+      font-size: 26px;
+    }
+    .head .note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(124,152,219,.14);
+      background: rgba(255,255,255,.02);
+    }
+    .stat .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .stat .value {
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .questions {
+      display: grid;
+      gap: 14px;
+    }
+    .input-card {
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(124,152,219,.14);
+      background: rgba(255,255,255,.02);
+      margin-bottom: 14px;
+    }
+    .input-card.good { border-color: rgba(65,211,154,.42); }
+    .input-card.bad { border-color: rgba(255,109,141,.42); }
+    .input-label {
+      font-size: 18px;
+      line-height: 1.42;
+      margin-bottom: 10px;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+    .cmd-input {
+      flex: 1 1 420px;
+      min-width: 0;
+      background: rgba(8,12,24,.85);
+      color: var(--text);
+      border: 1px solid rgba(124,152,219,.18);
+      border-radius: 12px;
+      padding: 12px 13px;
+      font-size: 14px;
+      font-family: Consolas, ui-monospace, monospace;
+    }
+    .cmd-check {
+      border: 1px solid rgba(124,152,219,.18);
+      background: rgba(97,169,255,.14);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .question {
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(124,152,219,.14);
+      background: rgba(255,255,255,.02);
+    }
+    .question.done-good { border-color: rgba(65,211,154,.42); }
+    .question.done-bad { border-color: rgba(255,109,141,.42); }
+    .q-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .q-num {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .badge {
+      font-size: 11px;
+      color: #dce7ff;
+      background: rgba(97,169,255,.14);
+      border: 1px solid rgba(97,169,255,.28);
+      padding: 5px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .q-text {
+      font-size: 18px;
+      line-height: 1.42;
+      margin-bottom: 12px;
+    }
+    .options {
+      display: grid;
+      gap: 8px;
+    }
+    .option {
+      width: 100%;
+      text-align: left;
+      border: 1px solid rgba(124,152,219,.16);
+      background: rgba(255,255,255,.02);
+      color: var(--text);
+      padding: 12px 13px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .option:hover { background: rgba(255,255,255,.04); }
+    .option.correct {
+      border-color: rgba(65,211,154,.5);
+      background: rgba(65,211,154,.13);
+    }
+    .option.wrong {
+      border-color: rgba(255,109,141,.5);
+      background: rgba(255,109,141,.12);
+    }
+    .feedback {
+      margin-top: 10px;
+      min-height: 22px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .feedback.good { color: var(--green); }
+    .feedback.bad { color: var(--red); }
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+    }
+    @media (max-width: 760px) {
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .head { flex-direction: column; }
+      h1 { font-size: 24px; }
+      .head h2 { font-size: 22px; }
+      .q-text { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel sidebar">
+      <h1>Госы</h1>
+      <div class="sub">Одна страница, блоки по очереди, быстрый проклик. Где в заметках были только ответы, формулировки я достроил сам.</div>
+      <div class="block-list" id="blockList"></div>
+      <div class="side-actions">
+        <button class="ghost-btn" id="resetBlockBtn">Сбросить блок</button>
+        <button class="ghost-btn" id="resetAllBtn">Сбросить все</button>
+        <button class="primary-btn" id="nextBlockBtn">Следующий блок</button>
+      </div>
+    </aside>
+
+    <main class="panel content">
+      <div class="head">
+        <div>
+          <h2 id="blockTitle"></h2>
+          <div class="note" id="blockNote"></div>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="questions" id="questions"></div>
+    </main>
+  </div>
+
+  <script>
+    const quizData = [
+      {
+        id: "python",
+        title: "Python",
+        note: "Первые пять вопросов собраны по ответам из твоего Word, два последних по заметкам.",
+        questions: [
+          {
+            text: "Какой специальный метод в Python отвечает именно за создание нового экземпляра объекта до его инициализации?",
+            source: "generated",
+            options: ["__init__", "__new__", "__call__", "__repr__"],
+            correct: 1
+          },
+          {
+            text: "Сколько уникальных значений вернет выражение `len(set([1, 2, 3, 4, 4, 2]))`?",
+            source: "generated",
+            options: ["3", "4", "5", "6"],
+            correct: 1
+          },
+          {
+            text: "Какое ключевое слово используется в Python для создания анонимной функции?",
+            source: "generated",
+            options: ["func", "lambda", "def", "anon"],
+            correct: 1
+          },
+          {
+            text: "Чему равно `len({10, 20, 30, 40})`?",
+            source: "generated",
+            options: ["2", "3", "4", "5"],
+            correct: 2
+          },
+          {
+            text: "Какой встроенный тип данных Python хранит только уникальные элементы?",
+            source: "generated",
+            options: ["list", "tuple", "dict", "set"],
+            correct: 3
+          },
+          {
+            text: "Какую парадигму в Python в основном поддерживают type hints?",
+            source: "notes",
+            options: ["Динамическое наследование", "Статическую типизацию", "Функциональную чистоту", "Многопоточность"],
+            correct: 1
+          },
+          {
+            text: "Какой результат даст подсчет элементов по значениям для списка `[\"a\", \"b\", \"a\"]`?",
+            source: "notes",
+            options: ["{'a': 1, 'b': 2}", "{'a': 2, 'b': 1}", "['a', 'b', 'a']", "{'a': 2}"],
+            correct: 1
+          }
+        ]
+      },
+      {
+        id: "ml",
+        title: "ML",
+        note: "Пять из ответа-листа, плюс два последних из заметок.",
+        questions: [
+          {
+            text: "Почему числовые признаки обычно масштабируют перед градиентными методами обучения?",
+            source: "generated",
+            options: [
+              "Чтобы ускорить загрузку CSV",
+              "Потому что большие диапазоны доминируют в градиенте и искажают обучение",
+              "Чтобы убрать все пропуски",
+              "Чтобы заменить категориальные признаки"
+            ],
+            correct: 1
+          },
+          {
+            text: "Какой ансамблевый подход строит модели последовательно, исправляя ошибки предыдущих?",
+            source: "generated",
+            options: ["Bagging", "Boosting", "Stacking", "Dropout"],
+            correct: 1
+          },
+          {
+            text: "Какую задачу решают методы вроде PCA и UMAP в самом общем виде?",
+            source: "generated",
+            options: ["Увеличение обучающей выборки", "Снижение размерности данных", "Токенизация текста", "Нормализация целевой переменной"],
+            correct: 1
+          },
+          {
+            text: "Что делает `fit_transform()` по сравнению с отдельными `fit()` и `transform()`?",
+            source: "generated",
+            options: ["Только считает статистики", "Только преобразует", "Сразу обучает преобразователь и применяет его", "Строит график качества"],
+            correct: 2
+          },
+          {
+            text: "Какой диапазон `mean score` чаще всего считается просто нормальным рабочим результатом модели без фанатизма?",
+            source: "generated",
+            options: ["Около 0.10–0.30", "Около 0.40–0.50", "Около 0.70–0.90", "Всегда строго 1.00"],
+            correct: 2
+          },
+          {
+            text: "Какая метрика чаще лучше подходит при сильном дисбалансе классов?",
+            source: "notes",
+            options: ["MAE", "F1-score", "MSE", "R2"],
+            correct: 1
+          },
+          {
+            text: "Какая функция активации чаще всего используется в скрытых слоях глубоких нейросетей?",
+            source: "notes",
+            options: ["Sigmoid", "Tanh", "ReLU", "Softmax"],
+            correct: 2
+          }
+        ]
+      },
+      {
+        id: "algorithms",
+        title: "Алгоритмы",
+        note: "Первые пять из ответа-листа, потом два допа из заметок.",
+        questions: [
+          {
+            text: "Какую сложность имеет линейный проход по массиву из `n` элементов?",
+            source: "generated",
+            options: ["O(log n)", "O(n)", "O(n log n)", "O(n²)"],
+            correct: 1
+          },
+          {
+            text: "Какая структура данных работает по принципу LIFO?",
+            source: "generated",
+            options: ["Очередь", "Стек", "Граф", "Хеш-таблица"],
+            correct: 1
+          },
+          {
+            text: "Какая структура данных естественно описывает иерархию: родитель, потомки, листья?",
+            source: "generated",
+            options: ["Массив", "Дерево", "Очередь", "Связный список"],
+            correct: 1
+          },
+          {
+            text: "Какая структура данных обычно используется для эффективного извлечения минимального или максимального элемента?",
+            source: "generated",
+            options: ["Стек", "Двоичная куча", "Множество", "Trie"],
+            correct: 1
+          },
+          {
+            text: "Какая асимптотика у пузырьковой сортировки в худшем случае?",
+            source: "generated",
+            options: ["O(log n)", "O(n)", "O(n log n)", "O(n²)"],
+            correct: 3
+          },
+          {
+            text: "Какая сортировка требует дополнительную память `O(n)`, но работает за `O(n log n)`?",
+            source: "notes",
+            options: ["Пузырьковая сортировка", "Сортировка выбором", "Сортировка слиянием", "Сортировка вставками"],
+            correct: 2
+          },
+          {
+            text: "Какое утверждение про BST верное?",
+            source: "notes",
+            options: [
+              "Левый потомок всегда больше родителя",
+              "Правый потомок всегда меньше родителя",
+              "Правый потомок всегда больше родителя",
+              "У BST у каждого узла ровно два потомка"
+            ],
+            correct: 2
+          }
+        ]
+      },
+      {
+        id: "sql",
+        title: "SQL",
+        note: "Пять базовых по ответам и два допа по твоим заметкам.",
+        questions: [
+          {
+            text: "Какой `JOIN` оставляет только строки, у которых есть совпадение в обеих таблицах?",
+            source: "generated",
+            options: ["LEFT JOIN", "RIGHT JOIN", "FULL JOIN", "INNER JOIN"],
+            correct: 3
+          },
+          {
+            text: "Что делает `GROUP BY`?",
+            source: "generated",
+            options: [
+              "Сортирует строки по алфавиту",
+              "Группирует строки с одинаковыми значениями для агрегатных функций",
+              "Удаляет дубликаты автоматически",
+              "Переименовывает таблицу"
+            ],
+            correct: 1
+          },
+          {
+            text: "Какое ключевое слово используют для фильтрации уже сгруппированных данных?",
+            source: "generated",
+            options: ["WHERE", "ORDER BY", "HAVING", "LIMIT"],
+            correct: 2
+          },
+          {
+            text: "Какой тип в PostgreSQL хранит дату и время с часовым поясом?",
+            source: "generated",
+            options: ["DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ"],
+            correct: 3
+          },
+          {
+            text: "Какое значение получает первый элемент в `ROW_NUMBER()`?",
+            source: "generated",
+            options: ["0", "1", "-1", "Зависит от таблицы"],
+            correct: 1
+          },
+          {
+            text: "Чем `EXPLAIN ANALYZE` отличается от обычного `EXPLAIN`?",
+            source: "notes",
+            options: [
+              "Ничем, это синонимы",
+              "Он только красивее форматирует план",
+              "Он реально выполняет запрос и показывает фактические метрики",
+              "Он доступен только в MySQL"
+            ],
+            correct: 2
+          },
+          {
+            text: "Какой синтаксис корректно создает индекс по полю `email` таблицы `users`?",
+            source: "notes",
+            options: [
+              "MAKE INDEX email_idx ON users(email);",
+              "CREATE INDEX email_idx ON users(email);",
+              "ADD INDEX email_idx users.email;",
+              "INDEX CREATE email_idx USING users(email);"
+            ],
+            correct: 1
+          }
+        ]
+      },
+      {
+        id: "web",
+        title: "Web",
+        note: "Пять базовых из ответа-листа. Один доп у тебя был, второй я добавил сам.",
+        questions: [
+          {
+            text: "Какая архитектура связана с Django?",
+            source: "generated",
+            options: ["MVC", "MVVM", "MTV (Model-Template-View)", "MVP"],
+            correct: 2
+          },
+          {
+            text: "Что означает HTTP-статус `409 Conflict`?",
+            source: "generated",
+            options: [
+              "Нужна авторизация",
+              "Ресурс не найден",
+              "Запрос не может быть выполнен из-за конфликта с текущим состоянием ресурса",
+              "Сервер временно недоступен"
+            ],
+            correct: 2
+          },
+          {
+            text: "Какой CSS-селектор выберет только `p`, которые являются прямыми потомками `div`?",
+            source: "generated",
+            options: ["div p", "div > p", "div + p", "p > div"],
+            correct: 1
+          },
+          {
+            text: "Что происходит при отправке формы методом `GET`?",
+            source: "generated",
+            options: [
+              "Данные уходят только в тело запроса",
+              "Форма не может быть отправлена",
+              "Данные формы будут добавлены в URL после `?`",
+              "Данные автоматически шифруются"
+            ],
+            correct: 2
+          },
+          {
+            text: "Какая команда Django применяет миграции к базе данных?",
+            source: "generated",
+            options: [
+              "python manage.py runserver",
+              "python manage.py migrate",
+              "python manage.py collectstatic",
+              "python manage.py makemessages"
+            ],
+            correct: 1
+          },
+          {
+            text: "Какой безопасный HTTP-метод обычно используют, чтобы данные не светились в адресной строке?",
+            source: "notes",
+            options: ["GET", "POST", "HEAD", "OPTIONS"],
+            correct: 1
+          },
+          {
+            text: "Какой тег в HTML используется для подключения JavaScript-файла?",
+            source: "generated",
+            options: ["<style>", "<script>", "<linkjs>", "<code>"],
+            correct: 1
+          }
+        ]
+      },
+      {
+        id: "nlp",
+        title: "Анализ текстовых данных",
+        note: "Пять по ответам из Word, один доп по заметкам, еще один я добавил сам.",
+        questions: [
+          {
+            text: "Что такое токенизация текста?",
+            source: "generated",
+            options: [
+              "Сжатие текста без потерь",
+              "Разбиение текста на слова, символы или подслова",
+              "Удаление стоп-слов",
+              "Замена слов на эмодзи"
+            ],
+            correct: 1
+          },
+          {
+            text: "Для чего в `Tokenizer` в Keras используют `oov_token`?",
+            source: "generated",
+            options: [
+              "Для удаления пунктуации",
+              "Для обозначения неизвестных слов вне словаря",
+              "Для подсчета длины предложений",
+              "Для нормализации регистра"
+            ],
+            correct: 1
+          },
+          {
+            text: "В чем разница между `texts_to_sequences` и `texts_to_matrix`?",
+            source: "generated",
+            options: [
+              "Оба возвращают одно и то же",
+              "`texts_to_sequences` возвращает индексы токенов, а `texts_to_matrix` — матрицу признаков",
+              "Первый работает только с русским текстом",
+              "Второй возвращает только списки строк"
+            ],
+            correct: 1
+          },
+          {
+            text: "Что делает SpatialDropout1D в NLP/CNN-задачах?",
+            source: "generated",
+            options: [
+              "Случайно удаляет отдельные буквы",
+              "Случайно обнуляет целые каналы признаков",
+              "Сортирует токены по частоте",
+              "Удлиняет последовательность"
+            ],
+            correct: 1
+          },
+          {
+            text: "Что возвращает RNN/LSTM при `return_sequences=True`?",
+            source: "generated",
+            options: [
+              "Только последнее скрытое состояние",
+              "Полную последовательность скрытых состояний по всем шагам",
+              "Только attention weights",
+              "Только embedding-матрицу"
+            ],
+            correct: 1
+          },
+          {
+            text: "Какую задачу решает модель Seq2Seq с attention?",
+            source: "notes",
+            options: [
+              "Сортировку массива",
+              "Преобразование одной последовательности в другую, например перевод",
+              "Только кластеризацию текстов",
+              "Только подсчет TF-IDF"
+            ],
+            correct: 1
+          },
+          {
+            text: "Что обычно делает stemming?",
+            source: "generated",
+            options: [
+              "Переводит текст в другой язык",
+              "Приводит слова к основе, отрезая окончания",
+              "Строит эмбеддинги",
+              "Удаляет все существительные"
+            ],
+            correct: 1
+          }
+        ]
+      },
+      {
+        id: "java",
+        title: "Java",
+        note: "Пять базовых по Word и два аккуратно добавленных допа.",
+        questions: [
+          {
+            text: "Какой примитивный тип в Java хранит логические значения `true/false`?",
+            source: "generated",
+            options: ["bool", "boolean", "bit", "logical"],
+            correct: 1
+          },
+          {
+            text: "Какая точка входа в обычное Java-приложение?",
+            source: "generated",
+            options: ["start()", "run()", "main()", "init()"],
+            correct: 2
+          },
+          {
+            text: "Чему равно выражение `5 % 2` в Java?",
+            source: "generated",
+            options: ["0", "1", "2", "2.5"],
+            correct: 1
+          },
+          {
+            text: "Какой оператор означает логическое ИЛИ в Java?",
+            source: "generated",
+            options: ["&&", "|", "||", "!!"],
+            correct: 2
+          },
+          {
+            text: "Что делает `super()` в конструкторе наследника?",
+            source: "generated",
+            options: [
+              "Удаляет родительский объект",
+              "Вызывает конструктор суперкласса",
+              "Делает метод статическим",
+              "Создает интерфейс"
+            ],
+            correct: 1
+          },
+          {
+            text: "Какое ключевое слово запрещает наследование класса в Java?",
+            source: "generated",
+            options: ["fixed", "sealed", "const", "final"],
+            correct: 3
+          },
+          {
+            text: "Какой тип коллекции в Java не допускает дубликаты элементов?",
+            source: "generated",
+            options: ["List", "Queue", "Set", "ArrayList"],
+            correct: 2
+          }
+        ]
+      }
+    ];
+
+    const storageKey = "gos-memory-quiz-v1";
+    const commandAnswer = 'curl.exe -d "привет" http://ex.boberchik.com.ru/x';
+    let currentBlockId = quizData[0].id;
+    let state = loadState();
+    let optionOrders = {};
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        return raw ? JSON.parse(raw) : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    }
+
+    function ensureBlockState(blockId) {
+      if (!state[blockId]) {
+        state[blockId] = {};
+      }
+      return state[blockId];
+    }
+
+    function getBlock(blockId) {
+      return quizData.find((block) => block.id === blockId);
+    }
+
+    function getBlockScore(block) {
+      const blockState = ensureBlockState(block.id);
+      let correct = 0;
+      let answered = 0;
+      block.questions.forEach((_, index) => {
+        const answer = blockState[index];
+        if (!answer) return;
+        answered += 1;
+        if (answer.correct) correct += 1;
+      });
+      return { correct, answered, total: block.questions.length };
+    }
+
+    function renderBlockList() {
+      const root = document.getElementById("blockList");
+      root.innerHTML = quizData.map((block) => {
+        const score = getBlockScore(block);
+        return `
+          <button class="block-btn ${block.id === currentBlockId ? "active" : ""}" data-block-id="${block.id}">
+            <div class="title">${block.title}</div>
+            <div class="meta">${score.correct}/${score.total} верно, ${score.answered}/${score.total} отвечено</div>
+          </button>
+        `;
+      }).join("");
+
+      root.querySelectorAll(".block-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+          currentBlockId = button.dataset.blockId;
+          render();
+        });
+      });
+    }
+
+    function renderStats(block) {
+      const score = getBlockScore(block);
+      const generatedCount = block.questions.filter((q) => q.source === "generated").length;
+      document.getElementById("stats").innerHTML = [
+        stat("Верно", score.correct),
+        stat("Отвечено", `${score.answered}/${score.total}`),
+        stat("Осталось", score.total - score.answered),
+        stat("Достроено мной", generatedCount)
+      ].join("");
+    }
+
+    function stat(label, value) {
+      return `<div class="stat"><div class="label">${label}</div><div class="value">${value}</div></div>`;
+    }
+
+    function shuffleArray(items) {
+      const copy = [...items];
+      for (let i = copy.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function getQuestionOrder(blockId, qIndex, options) {
+      if (!optionOrders[blockId]) {
+        optionOrders[blockId] = {};
+      }
+      if (!optionOrders[blockId][qIndex]) {
+        optionOrders[blockId][qIndex] = shuffleArray(options.map((_, index) => index));
+      }
+      return optionOrders[blockId][qIndex];
+    }
+
+    function renderQuestions(block) {
+      const blockState = ensureBlockState(block.id);
+      const root = document.getElementById("questions");
+      const cmdState = blockState.__command || null;
+      root.innerHTML = `
+        <section class="input-card ${cmdState ? (cmdState.correct ? "good" : "bad") : ""}">
+          <div class="q-top">
+            <div class="q-num">Практика</div>
+            <div class="badge">ввод руками</div>
+          </div>
+          <div class="input-label">Введи команду, которая отправит в GPT слово <b>привет</b> через твой endpoint.</div>
+          <div class="input-row">
+            <input class="cmd-input" id="commandInput" placeholder='Введите' value="${cmdState ? escapeAttr(cmdState.value) : ""}">
+            <button class="cmd-check" id="checkCommandBtn">Проверить</button>
+          </div>
+          <div class="feedback ${cmdState ? (cmdState.correct ? "good" : "bad") : ""}" id="commandFeedback">
+            ${cmdState ? (cmdState.correct ? "Да, это правильная команда." : escapeHtml(getCommandHint(cmdState.value))) : ""}
+          </div>
+        </section>
+      ` + block.questions.map((question, qIndex) => {
+        const saved = blockState[qIndex];
+        const doneClass = saved ? (saved.correct ? "done-good" : "done-bad") : "";
+        const badge = question.source === "notes" ? "по заметкам" : question.source === "generated" ? "достроено" : "";
+        const optionOrder = getQuestionOrder(block.id, qIndex, question.options);
+        return `
+          <section class="question ${doneClass}">
+            <div class="q-top">
+              <div class="q-num">Вопрос ${qIndex + 1}</div>
+              ${badge ? `<div class="badge">${badge}</div>` : ""}
+            </div>
+            <div class="q-text">${escapeHtml(question.text)}</div>
+            <div class="options">
+              ${optionOrder.map((originalIndex) => {
+                const option = question.options[originalIndex];
+                const isCorrect = originalIndex === question.correct;
+                const wasClicked = saved && (saved.selectedText === option || saved.selected === originalIndex);
+                let cls = "";
+                if (saved) {
+                  if (isCorrect) cls = "correct";
+                  if (wasClicked && !saved.correct) cls = "wrong";
+                }
+                return `<button class="option ${cls}" data-question-index="${qIndex}" data-option-index="${originalIndex}">${escapeHtml(option)}</button>`;
+              }).join("")}
+            </div>
+            <div class="feedback ${saved ? (saved.correct ? "good" : "bad") : ""}">
+              ${saved ? (saved.correct ? "Да, это правильный ответ." : `Мимо. Правильный ответ: ${escapeHtml(question.options[question.correct])}`) : ""}
+            </div>
+          </section>
+        `;
+      }).join("");
+
+      const input = document.getElementById("commandInput");
+      const checkBtn = document.getElementById("checkCommandBtn");
+      const check = () => {
+        const value = input.value.trim();
+        const correct = isCommandCorrect(value);
+        ensureBlockState(block.id).__command = { value, correct };
+        saveState();
+        render();
+      };
+      checkBtn.addEventListener("click", check);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          check();
+        }
+      });
+
+      root.querySelectorAll(".option").forEach((button) => {
+        button.addEventListener("click", () => {
+          const qIndex = Number(button.dataset.questionIndex);
+          const optIndex = Number(button.dataset.optionIndex);
+          const q = block.questions[qIndex];
+          ensureBlockState(block.id)[qIndex] = {
+            selected: optIndex,
+            selectedText: q.options[optIndex],
+            correct: optIndex === q.correct
+          };
+          saveState();
+          render();
+        });
+      });
+    }
+
+    function normalizeCommand(text) {
+      return text
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .replace(/'/g, '"')
+        .trim();
+    }
+
+    function isCommandCorrect(text) {
+      const normalized = normalizeCommand(text);
+      return (
+        normalized.includes("curl.exe") &&
+        normalized.includes('-d "привет"') &&
+        normalized.includes("http://ex.boberchik.com.ru/x")
+      );
+    }
+
+    function getCommandHint(text) {
+      const normalized = normalizeCommand(text);
+      const misses = [];
+
+      if (!normalized.includes("curl.exe")) {
+        misses.push("начало команды");
+      }
+      if (!normalized.includes('-d "привет"')) {
+        misses.push("часть с текстом запроса");
+      }
+      if (!normalized.includes("http://ex.boberchik.com.ru/x")) {
+        misses.push("адрес endpoint");
+      }
+
+      if (!misses.length) {
+        return "Очень близко. Проверь пробелы, кавычки и порядок частей команды.";
+      }
+
+      if (misses.length === 1) {
+        return "Почти. Проверь " + misses[0] + ".";
+      }
+
+      return "Почти. Сверь вот эти части: " + misses.join(", ") + ".";
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function escapeAttr(text) {
+      return escapeHtml(text);
+    }
+
+    function render() {
+      const block = getBlock(currentBlockId);
+      document.getElementById("blockTitle").textContent = block.title;
+      document.getElementById("blockNote").textContent = block.note;
+      renderBlockList();
+      renderStats(block);
+      renderQuestions(block);
+    }
+
+    document.getElementById("resetBlockBtn").addEventListener("click", () => {
+      state[currentBlockId] = {};
+      delete optionOrders[currentBlockId];
+      saveState();
+      render();
+    });
+
+    document.getElementById("resetAllBtn").addEventListener("click", () => {
+      state = {};
+      optionOrders = {};
+      saveState();
+      render();
+    });
+
+    document.getElementById("nextBlockBtn").addEventListener("click", () => {
+      const currentIndex = quizData.findIndex((block) => block.id === currentBlockId);
+      const nextIndex = (currentIndex + 1) % quizData.length;
+      currentBlockId = quizData[nextIndex].id;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
