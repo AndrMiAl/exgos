@@ -274,6 +274,23 @@
       gap: 8px;
       flex-wrap: wrap;
     }
+    .question-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(124,152,219,.18);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .question-toggle input {
+      margin: 0;
+      accent-color: var(--blue);
+    }
     .mode-btn {
       border: 1px solid rgba(124,152,219,.18);
       background: rgba(255,255,255,.03);
@@ -786,6 +803,7 @@
     let transientCommandState = {};
     let questionViewMode = "single";
     let questionCursorByBlock = {};
+    let showQuestionTexts = false;
 
     function loadState() {
       try {
@@ -847,6 +865,13 @@
       }
       questionCursorByBlock[blockId] = Math.max(0, Math.min(questionCursorByBlock[blockId], Math.max(0, total - 1)));
       return questionCursorByBlock[blockId];
+    }
+
+    function shouldShowQuestionText(block, qIndex) {
+      if (showQuestionTexts) {
+        return true;
+      }
+      return qIndex >= Math.max(0, block.questions.length - 2);
     }
 
     function renderBlockList() {
@@ -950,6 +975,9 @@
         questionViewMode === "single"
           ? block.questions.map((question, qIndex) => ({ question, qIndex })).filter(({ qIndex }) => qIndex === questionCursor)
           : block.questions.map((question, qIndex) => ({ question, qIndex }));
+      const questionModeHint = showQuestionTexts
+        ? "Формулировки показаны."
+        : "Формулировки скрыты, кроме последних двух вопросов.";
       const successSticker = isBlockPerfect(block) ? `
         <section class="success-sticker">
           <div class="success-sticker__title">Идеально. Все решено правильно.</div>
@@ -960,9 +988,13 @@
       root.innerHTML = `
         <section class="question-mode-bar">
           <div class="question-mode-meta">
-            ${questionViewMode === "single" ? `Сейчас показывается вопрос ${questionCursor + 1} из ${block.questions.length}` : `Сейчас показываются все вопросы блока: ${block.questions.length}`}
+            ${questionViewMode === "single" ? `Сейчас показывается вопрос ${questionCursor + 1} из ${block.questions.length}` : `Сейчас показываются все вопросы блока: ${block.questions.length}`} ${questionModeHint}
           </div>
           <div class="question-mode-actions">
+            <label class="question-toggle">
+              <input type="checkbox" id="toggleQuestionTexts" ${showQuestionTexts ? "checked" : ""}>
+              <span>Подставить вопросы</span>
+            </label>
             <button class="mode-btn ${questionViewMode === "single" ? "active" : ""}" id="singleModeBtn">По одному</button>
             <button class="mode-btn ${questionViewMode === "all" ? "active" : ""}" id="allModeBtn">Все сразу</button>
             ${questionViewMode === "single" ? `<button class="mode-btn" id="prevQuestionBtn">Назад</button><button class="mode-btn" id="nextQuestionBtn">Дальше</button>` : ""}
@@ -987,13 +1019,14 @@
         const doneClass = saved ? (saved.correct ? "done-good" : "done-bad") : "";
         const badge = question.source === "notes" ? "по заметкам" : question.source === "generated" ? "достроено" : "";
         const optionOrder = getQuestionOrder(block.id, qIndex, question.options);
+        const showText = shouldShowQuestionText(block, qIndex);
         return `
           <section class="question ${doneClass}">
             <div class="q-top">
               <div class="q-num">Вопрос ${qIndex + 1}</div>
               ${badge ? `<div class="badge">${badge}</div>` : ""}
             </div>
-            <div class="q-text">${escapeHtml(question.text)}</div>
+            ${showText ? `<div class="q-text">${escapeHtml(question.text)}</div>` : ""}
             <div class="options">
               ${optionOrder.map((originalIndex) => {
                 const option = question.options[originalIndex];
@@ -1017,6 +1050,7 @@
 
       const input = document.getElementById("commandInput");
       const checkBtn = document.getElementById("checkCommandBtn");
+      const toggleQuestionTexts = document.getElementById("toggleQuestionTexts");
       const singleModeBtn = document.getElementById("singleModeBtn");
       const allModeBtn = document.getElementById("allModeBtn");
       const prevQuestionBtn = document.getElementById("prevQuestionBtn");
@@ -1027,6 +1061,10 @@
         transientCommandState[block.id] = { value, correct };
         render();
       };
+      toggleQuestionTexts.addEventListener("change", () => {
+        showQuestionTexts = toggleQuestionTexts.checked;
+        render();
+      });
       singleModeBtn.addEventListener("click", () => {
         questionViewMode = "single";
         render();
