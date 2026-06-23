@@ -291,19 +291,6 @@
       margin: 0;
       accent-color: var(--blue);
     }
-    .mode-btn {
-      border: 1px solid rgba(124,152,219,.18);
-      background: rgba(255,255,255,.03);
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .mode-btn.active {
-      background: rgba(97,169,255,.14);
-      border-color: rgba(97,169,255,.42);
-    }
     .success-sticker {
       display: grid;
       justify-items: center;
@@ -801,8 +788,6 @@
     let state = loadState();
     let optionOrders = {};
     let transientCommandState = {};
-    let questionViewMode = "single";
-    let questionCursorByBlock = {};
     let showQuestionTexts = false;
 
     function loadState() {
@@ -857,14 +842,6 @@
         score.answered === score.total &&
         score.correct === score.total
       );
-    }
-
-    function getQuestionCursor(blockId, total) {
-      if (!(blockId in questionCursorByBlock)) {
-        questionCursorByBlock[blockId] = 0;
-      }
-      questionCursorByBlock[blockId] = Math.max(0, Math.min(questionCursorByBlock[blockId], Math.max(0, total - 1)));
-      return questionCursorByBlock[blockId];
     }
 
     function shouldShowQuestionText(block, qIndex) {
@@ -970,14 +947,9 @@
       const blockState = ensureBlockState(block.id);
       const root = document.getElementById("questions");
       const cmdState = transientCommandState[block.id] || null;
-      const questionCursor = getQuestionCursor(block.id, block.questions.length);
-      const visibleQuestions =
-        questionViewMode === "single"
-          ? block.questions.map((question, qIndex) => ({ question, qIndex })).filter(({ qIndex }) => qIndex === questionCursor)
-          : block.questions.map((question, qIndex) => ({ question, qIndex }));
       const questionModeHint = showQuestionTexts
-        ? "Формулировки показаны."
-        : "Формулировки скрыты, кроме последних двух вопросов.";
+        ? "Формулировки показаны у всех вопросов."
+        : "У первых пяти вопросов скрыты формулировки, а у 6 и 7 подписи показаны.";
       const successSticker = isBlockPerfect(block) ? `
         <section class="success-sticker">
           <div class="success-sticker__title">Идеально. Все решено правильно.</div>
@@ -988,16 +960,13 @@
       root.innerHTML = `
         <section class="question-mode-bar">
           <div class="question-mode-meta">
-            ${questionViewMode === "single" ? `Сейчас показывается вопрос ${questionCursor + 1} из ${block.questions.length}` : `Сейчас показываются все вопросы блока: ${block.questions.length}`} ${questionModeHint}
+            Сейчас показываются все вопросы блока: ${block.questions.length}. ${questionModeHint}
           </div>
           <div class="question-mode-actions">
             <label class="question-toggle">
               <input type="checkbox" id="toggleQuestionTexts" ${showQuestionTexts ? "checked" : ""}>
-              <span>Подставить вопросы</span>
+              <span>Показать все формулировки</span>
             </label>
-            <button class="mode-btn ${questionViewMode === "single" ? "active" : ""}" id="singleModeBtn">По одному</button>
-            <button class="mode-btn ${questionViewMode === "all" ? "active" : ""}" id="allModeBtn">Все сразу</button>
-            ${questionViewMode === "single" ? `<button class="mode-btn" id="prevQuestionBtn">Назад</button><button class="mode-btn" id="nextQuestionBtn">Дальше</button>` : ""}
           </div>
         </section>
         <section class="input-card ${cmdState ? (cmdState.correct ? "good" : "bad") : ""}">
@@ -1014,7 +983,7 @@
             ${cmdState ? (cmdState.correct ? "Да, это правильная команда." : escapeHtml(getCommandHint(cmdState.value))) : ""}
           </div>
         </section>
-      ` + visibleQuestions.map(({ question, qIndex }) => {
+      ` + block.questions.map((question, qIndex) => {
         const saved = blockState[qIndex];
         const doneClass = saved ? (saved.correct ? "done-good" : "done-bad") : "";
         const badge = question.source === "notes" ? "по заметкам" : question.source === "generated" ? "достроено" : "";
@@ -1051,10 +1020,6 @@
       const input = document.getElementById("commandInput");
       const checkBtn = document.getElementById("checkCommandBtn");
       const toggleQuestionTexts = document.getElementById("toggleQuestionTexts");
-      const singleModeBtn = document.getElementById("singleModeBtn");
-      const allModeBtn = document.getElementById("allModeBtn");
-      const prevQuestionBtn = document.getElementById("prevQuestionBtn");
-      const nextQuestionBtn = document.getElementById("nextQuestionBtn");
       const check = () => {
         const value = input.value.trim();
         const correct = isCommandCorrect(value);
@@ -1065,26 +1030,6 @@
         showQuestionTexts = toggleQuestionTexts.checked;
         render();
       });
-      singleModeBtn.addEventListener("click", () => {
-        questionViewMode = "single";
-        render();
-      });
-      allModeBtn.addEventListener("click", () => {
-        questionViewMode = "all";
-        render();
-      });
-      if (prevQuestionBtn) {
-        prevQuestionBtn.addEventListener("click", () => {
-          questionCursorByBlock[block.id] = Math.max(0, getQuestionCursor(block.id, block.questions.length) - 1);
-          render();
-        });
-      }
-      if (nextQuestionBtn) {
-        nextQuestionBtn.addEventListener("click", () => {
-          questionCursorByBlock[block.id] = Math.min(block.questions.length - 1, getQuestionCursor(block.id, block.questions.length) + 1);
-          render();
-        });
-      }
       checkBtn.addEventListener("click", check);
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -1104,9 +1049,6 @@
             correct: optIndex === q.correct
           };
           saveState();
-          if (questionViewMode === "single" && qIndex < block.questions.length - 1) {
-            questionCursorByBlock[block.id] = qIndex + 1;
-          }
           render();
         });
       });
@@ -1181,7 +1123,6 @@
       state[currentBlockId] = {};
       delete optionOrders[currentBlockId];
       delete transientCommandState[currentBlockId];
-      questionCursorByBlock[currentBlockId] = 0;
       saveState();
       render();
     });
@@ -1190,7 +1131,6 @@
       state = {};
       optionOrders = {};
       transientCommandState = {};
-      questionCursorByBlock = {};
       saveState();
       render();
     });
