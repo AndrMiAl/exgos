@@ -25,6 +25,11 @@ function createElement(id) {
 }
 
 async function renderQuizHtml(filePath) {
+  const runtime = await loadQuizRuntime(filePath)
+  return runtime.document.getElementById('questions').innerHTML
+}
+
+async function loadQuizRuntime(filePath) {
   const html = await readFile(filePath, 'utf8')
   const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>\s*<\/body>/i)
 
@@ -68,9 +73,16 @@ async function renderQuizHtml(filePath) {
 
   sandbox.window = sandbox
   vm.createContext(sandbox)
-  vm.runInContext(scriptMatch[1], sandbox)
+  vm.runInContext(`${scriptMatch[1]}
+this.__quizData = quizData
+this.__getBalancedOptionText = getBalancedOptionText
+`, sandbox)
 
-  return document.getElementById('questions').innerHTML
+  return {
+    document,
+    quizData: sandbox.__quizData,
+    getBalancedOptionText: sandbox.__getBalancedOptionText,
+  }
 }
 
 function countQuestionCards(questionsHtml) {
@@ -93,5 +105,47 @@ test('memory quiz keeps questions 6 and 7 labeled by default', async () => {
 
     assert.match(questionsHtml, /Какую парадигму в Python в основном поддерживают type hints\?/u, `${filePath} should show the sixth question text`)
     assert.match(questionsHtml, /Какой результат даст подсчет элементов по значениям/u, `${filePath} should show the seventh question text`)
+  }
+})
+
+test('memory quiz length-balances distractors for long-answer questions', async () => {
+  for (const filePath of quizFiles) {
+    const { quizData, getBalancedOptionText } = await loadQuizRuntime(filePath)
+
+    for (const block of quizData) {
+      block.questions.forEach((question, qIndex) => {
+        const correctText = question.options[question.correct]
+        const otherLengths = question.options
+          .map((option, optionIndex) => (optionIndex === question.correct ? 0 : option.length))
+        const longestWrong = Math.max(...otherLengths)
+        const isLongAnswerCase = correctText.length >= 40 && longestWrong <= correctText.length - 8
+        const isAcronymCase = correctText.includes('(') && longestWrong <= 5
+
+        if (!isLongAnswerCase && !isAcronymCase) {
+          return
+        }
+
+        const minWrongLength = isAcronymCase
+          ? 28
+          : Math.max(40, Math.floor(correctText.length * 0.6))
+
+        question.options.forEach((option, optionIndex) => {
+          if (optionIndex === question.correct) {
+            assert.equal(
+              getBalancedOptionText(question, option, optionIndex, qIndex),
+              option,
+              `${filePath} should keep the correct answer text unchanged for "${question.text}"`,
+            )
+            return
+          }
+
+          const renderedOption = getBalancedOptionText(question, option, optionIndex, qIndex)
+          assert.ok(
+            renderedOption.length >= minWrongLength,
+            `${filePath} should stretch distractor "${option}" for "${question.text}"`,
+          )
+        })
+      })
+    }
   }
 })

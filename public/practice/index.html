@@ -905,28 +905,114 @@
       return optionOrders[blockId][qIndex];
     }
 
+    const optionExpansionOverrides = {
+      "MVC": "MVC (Model-View-Controller) с классическим разделением логики, данных и интерфейса",
+      "MVVM": "MVVM (Model-View-ViewModel) с отдельным слоем связывания модели и представления",
+      "MVP": "MVP (Model-View-Presenter) с вынесенной логикой взаимодействия в отдельный presenter"
+    };
+
+    function shouldBalanceOptionLength(question, optionIndex) {
+      if (optionIndex === question.correct) {
+        return false;
+      }
+
+      const correctLength = question.options[question.correct].length;
+      const optionLength = question.options[optionIndex].length;
+
+      if (correctLength < 24) {
+        return false;
+      }
+
+      return correctLength - optionLength >= 8 || (correctLength >= 40 && optionLength < 36);
+    }
+
+    function expandDistractorText(option, qIndex, optionIndex) {
+      if (optionExpansionOverrides[option]) {
+        return optionExpansionOverrides[option];
+      }
+
+      if (/^Чтобы\s/i.test(option)) {
+        return `${option} на подготовительном этапе работы с данными, а не ради нужной причины из вопроса`;
+      }
+
+      if (/^Только\s/i.test(option)) {
+        return `${option}, без получения того основного результата, который здесь проверяется`;
+      }
+
+      if (/^Для\s/i.test(option)) {
+        return `${option} во время предварительной обработки текста или данных, а не для главной цели`;
+      }
+
+      if (/^Он\s/i.test(option)) {
+        return `${option}, но это не то поведение, о котором спрашивают в этом вопросе`;
+      }
+
+      if (/^Нужна\s/i.test(option)) {
+        return `${option} пользователя перед доступом к защищенному ресурсу или операции`;
+      }
+
+      if (/^Ресурс\s/i.test(option)) {
+        return `${option} на сервере по указанному адресу или текущему маршруту`;
+      }
+
+      if (/^Сортирует\s/i.test(option)) {
+        return `${option}, а не выполняет ту основную операцию, о которой идет речь`;
+      }
+
+      if (/^(Удаляет|Удаление)\s/i.test(option)) {
+        return `${option} как этап очистки входных данных, а не как правильный результат`;
+      }
+
+      if (/^Замена\s/i.test(option)) {
+        return `${option} ради стилизации текста, а не ради корректной обработки содержания`;
+      }
+
+      if (/^Оба\s/i.test(option)) {
+        return `${option} и якобы не отличаются по формату результата или способу представления`;
+      }
+
+      if (/^Первый\s/i.test(option)) {
+        return `${option} и поэтому якобы не подходит для общего случая обработки текста`;
+      }
+
+      if (/^Второй\s/i.test(option)) {
+        return `${option} и не строит полноценное числовое представление признаков`;
+      }
+
+      if (/^Переводит\s/i.test(option)) {
+        return `${option} целиком, а не приводит слова к общей основе по морфологии`;
+      }
+
+      if (/^Строит\s/i.test(option)) {
+        return `${option} вместо выполнения того преобразования, которое спрашивается`;
+      }
+
+      if (/^Случайно\s/i.test(option)) {
+        const tails = [
+          "во входном тексте или последовательности, а не на уровне карт признаков",
+          "только на поверхностном уровне, а не по целым признаковым каналам"
+        ];
+        return `${option} ${tails[(qIndex + optionIndex) % tails.length]}`;
+      }
+
+      const fallbackTails = [
+        "как отдельную идею, но не как правильный ответ на этот вопрос",
+        "в рамках похожего шага, но без нужного результата на выходе",
+        "как частное действие, а не как то, что здесь действительно проверяется"
+      ];
+      return `${option} ${fallbackTails[(qIndex + optionIndex) % fallbackTails.length]}`;
+    }
+
     function getBalancedOptionText(question, option, optionIndex, qIndex) {
       if (optionIndex === question.correct) {
         return option;
       }
 
-      if (option.length <= 18) {
+      if (!shouldBalanceOptionLength(question, optionIndex)) {
         return option;
       }
 
-      const variants = [
-        (text) => text,
-        (text) => text.replace(/^Какую\s/i, "Какая "),
-        (text) => text.replace(/^Какая\s/i, "Какую "),
-        (text) => text.replace(/^Статическую\s/i, "Типизацию статическую "),
-        (text) => text.replace(/^Функциональную\s/i, "Функциональную модель "),
-        (text) => text.replace(/^Многопоточность\s/i, "Подход с многопоточностью "),
-        (text) => text.replace(/^Динамическое\s/i, "Динамический подход "),
-      ];
-
-      const mode = Math.floor(Date.now() / 1200);
-      const variantIndex = (mode + qIndex + optionIndex) % variants.length;
-      return variants[variantIndex](option) || option;
+      return expandDistractorText(option, qIndex, optionIndex);
     }
 
     function equalizeOptionHeights(root) {
