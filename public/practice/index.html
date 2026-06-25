@@ -921,6 +921,22 @@
       " нейтральное уточнение",
       " вспомогательный текст"
     ];
+    const visibleBalanceStarters = [
+      "но это не главный смысл",
+      "хотя в вопросе акцент на другом",
+      "но это только часть процесса",
+      "однако это не ключевой шаг",
+      "хотя звучит близко к ответу",
+      "но не как основной вариант"
+    ];
+    const visibleBalanceTails = [
+      "в этой формулировке",
+      "для данного случая",
+      "если держаться условия",
+      "по логике задания",
+      "в текущем контексте",
+      "если смотреть на вопрос целиком"
+    ];
 
     function getOptionBaseText(option) {
       return optionExpansionOverrides[option] || option;
@@ -930,25 +946,48 @@
       const lengths = question.options.map((item) => getOptionBaseText(item).length);
       const minLength = Math.min(...lengths);
       const maxLength = Math.max(...lengths);
+      const correctLength = lengths[question.correct];
+      const spread = maxLength - minLength;
+      const correctIsExtreme = correctLength === minLength || correctLength === maxLength;
+
       if (maxLength === minLength) {
         return 0;
       }
 
-      return maxLength;
+      if (spread >= 12) {
+        return maxLength;
+      }
+
+      if (correctIsExtreme && maxLength >= 24) {
+        return maxLength;
+      }
+
+      if (maxLength >= 34 && spread >= 6) {
+        return maxLength;
+      }
+
+      if (maxLength >= 20 && spread >= 4) {
+        return maxLength;
+      }
+
+      return 0;
     }
 
-    function getOptionBalanceText(question, option, optionIndex, qIndex) {
+    function getOptionBalanceText(question, optionOrRenderedText, optionIndex, qIndex) {
       const targetLength = getOptionTargetLength(question);
       if (!targetLength) {
         return "";
       }
 
-      const baseText = getOptionBaseText(option);
-      if (baseText.length >= targetLength) {
+      const renderedText = question.options.includes(optionOrRenderedText)
+        ? getBalancedOptionText(question, optionOrRenderedText, optionIndex, qIndex)
+        : optionOrRenderedText;
+
+      if (renderedText.length >= targetLength) {
         return "";
       }
 
-      const neededLength = targetLength - baseText.length;
+      const neededLength = targetLength - renderedText.length;
       let filler = "";
       let chunkIndex = (qIndex + optionIndex) % hiddenBalanceChunks.length;
 
@@ -961,7 +1000,39 @@
     }
 
     function getBalancedOptionText(question, option, optionIndex, qIndex) {
-      return getOptionBaseText(option);
+      const baseText = getOptionBaseText(option);
+      if (optionIndex === question.correct) {
+        return baseText;
+      }
+
+      const targetLength = getOptionTargetLength(question);
+      if (!targetLength) {
+        return baseText;
+      }
+
+      const correctLength = getOptionBaseText(question.options[question.correct]).length;
+      if (correctLength < 34 || baseText.length <= 18) {
+        return baseText;
+      }
+
+      if (baseText.length >= Math.round(targetLength * 0.78)) {
+        return baseText;
+      }
+
+      if ((qIndex + optionIndex) % 3 === 0) {
+        return baseText;
+      }
+
+      let result = `${baseText}, ${visibleBalanceStarters[(qIndex + optionIndex) % visibleBalanceStarters.length]}`;
+      let tailIndex = qIndex + optionIndex;
+      const visibleTarget = Math.min(targetLength - 6, Math.round(correctLength * 0.9));
+
+      while (result.length < visibleTarget) {
+        result += `, ${visibleBalanceTails[tailIndex % visibleBalanceTails.length]}`;
+        tailIndex += 1;
+      }
+
+      return result;
     }
 
     function equalizeOptionHeights(root) {
@@ -1035,7 +1106,7 @@
               ${optionOrder.map((originalIndex) => {
                 const option = question.options[originalIndex];
                 const optionText = getBalancedOptionText(question, option, originalIndex, qIndex);
-                const optionBalanceText = getOptionBalanceText(question, option, originalIndex, qIndex);
+                const optionBalanceText = getOptionBalanceText(question, optionText, originalIndex, qIndex);
                 const isCorrect = originalIndex === question.correct;
                 const wasClicked = saved && (saved.selectedText === option || saved.selected === originalIndex);
                 let cls = "";
