@@ -89,6 +89,14 @@ function countQuestionCards(questionsHtml) {
   return (questionsHtml.match(/<section class="question (?:done-good|done-bad)?"/g) ?? []).length
 }
 
+function average(numbers) {
+  return numbers.reduce((sum, number) => sum + number, 0) / numbers.length
+}
+
+function getSpread(numbers) {
+  return Math.max(...numbers) - Math.min(...numbers)
+}
+
 test('memory quiz renders all questions without single-question navigation controls', async () => {
   for (const filePath of quizFiles) {
     const questionsHtml = await renderQuizHtml(filePath)
@@ -108,44 +116,92 @@ test('memory quiz keeps questions 6 and 7 labeled by default', async () => {
   }
 })
 
-test('memory quiz length-balances distractors for long-answer questions', async () => {
+test('memory quiz reduces visible answer-length bias for standout options', async () => {
   for (const filePath of quizFiles) {
     const { quizData, getBalancedOptionText } = await loadQuizRuntime(filePath)
+    let checkedQuestions = 0
 
     for (const block of quizData) {
       block.questions.forEach((question, qIndex) => {
-        const correctText = question.options[question.correct]
-        const otherLengths = question.options
-          .map((option, optionIndex) => (optionIndex === question.correct ? 0 : option.length))
-        const longestWrong = Math.max(...otherLengths)
-        const isLongAnswerCase = correctText.length >= 40 && longestWrong <= correctText.length - 8
-        const isAcronymCase = correctText.includes('(') && longestWrong <= 5
+        const originalLengths = question.options.map((option) => option.length)
+        const renderedLengths = question.options.map((option, optionIndex) =>
+          getBalancedOptionText(question, option, optionIndex, qIndex).length,
+        )
+        const correctOriginalLength = originalLengths[question.correct]
+        const correctRenderedLength = renderedLengths[question.correct]
+        const wrongOriginalLengths = originalLengths.filter((_, optionIndex) => optionIndex !== question.correct)
+        const wrongRenderedLengths = renderedLengths.filter((_, optionIndex) => optionIndex !== question.correct)
+        const originalDistance = Math.abs(correctOriginalLength - average(wrongOriginalLengths))
+        const renderedDistance = Math.abs(correctRenderedLength - average(wrongRenderedLengths))
+        const correctLooksTooShort = Math.max(...wrongOriginalLengths) - correctOriginalLength >= 12
+        const correctLooksTooLong = correctOriginalLength - Math.min(...wrongOriginalLengths) >= 12
 
-        if (!isLongAnswerCase && !isAcronymCase) {
+        if (!correctLooksTooShort && !correctLooksTooLong && getSpread(originalLengths) < 18) {
           return
         }
 
-        const minWrongLength = isAcronymCase
-          ? 28
-          : Math.max(40, Math.floor(correctText.length * 0.6))
+        checkedQuestions += 1
 
-        question.options.forEach((option, optionIndex) => {
-          if (optionIndex === question.correct) {
-            assert.equal(
-              getBalancedOptionText(question, option, optionIndex, qIndex),
-              option,
-              `${filePath} should keep the correct answer text unchanged for "${question.text}"`,
-            )
-            return
-          }
+        assert.ok(
+          renderedDistance <= originalDistance,
+          `${filePath} should make the correct answer less distinguishable by length for "${question.text}"`,
+        )
 
-          const renderedOption = getBalancedOptionText(question, option, optionIndex, qIndex)
+        if (correctLooksTooShort) {
           assert.ok(
-            renderedOption.length >= minWrongLength,
-            `${filePath} should stretch distractor "${option}" for "${question.text}"`,
+            correctRenderedLength > correctOriginalLength,
+            `${filePath} should lengthen the correct answer for "${question.text}"`,
           )
-        })
+        }
+
+        if (correctLooksTooLong) {
+          assert.ok(
+            wrongRenderedLengths.some((length, index) => length > wrongOriginalLengths[index]),
+            `${filePath} should lengthen shorter distractors for "${question.text}"`,
+          )
+        }
       })
     }
+
+    assert.ok(checkedQuestions > 0, `${filePath} should exercise at least one visible length-bias case`)
+  }
+})
+
+test('memory quiz keeps known visual-regression questions balanced by length', async () => {
+  const regressionPatterns = [
+    /ROW_NUMBER\(\)/,
+    /Какая архитектура связана с Django\?/,
+    /return_sequences=True/,
+    /Что обычно делает stemming\?/,
+  ]
+
+  for (const filePath of quizFiles) {
+    const { quizData, getBalancedOptionText } = await loadQuizRuntime(filePath)
+
+    regressionPatterns.forEach((pattern) => {
+      let matched = false
+
+      for (const block of quizData) {
+        const questionIndex = block.questions.findIndex((question) => pattern.test(question.text))
+        if (questionIndex === -1) {
+          continue
+        }
+
+        matched = true
+        const question = block.questions[questionIndex]
+        const originalLengths = question.options.map((option) => option.length)
+        const renderedLengths = question.options.map((option, optionIndex) =>
+          getBalancedOptionText(question, option, optionIndex, questionIndex).length,
+        )
+
+        assert.ok(
+          getSpread(renderedLengths) < getSpread(originalLengths),
+          `${filePath} should reduce spread for "${question.text}"`,
+        )
+        break
+      }
+
+      assert.ok(matched, `${filePath} should include a regression case matching ${pattern}`)
+    })
   }
 })
