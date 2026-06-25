@@ -28,6 +28,27 @@
         var(--bg);
       color: var(--text);
     }
+    .site-shell {
+      width: min(1440px, calc(100% - 28px));
+      margin: 18px auto 0;
+    }
+    .site-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      line-height: 1.4;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(124,152,219,.18);
+      background: rgba(255,255,255,.03);
+    }
+    .site-link:hover {
+      color: var(--text);
+      background: rgba(255,255,255,.05);
+    }
     .app {
       width: min(1440px, calc(100% - 28px));
       margin: 18px auto 28px;
@@ -335,9 +356,12 @@
   </style>
 </head>
 <body>
+  <div class="site-shell">
+    <a class="site-link" href="../">К основному разделу госов</a>
+  </div>
   <div class="app">
     <aside class="panel sidebar">
-      <h1>Госы</h1>
+      <h1>Госы: практика</h1>
       <div class="sub">Одна страница, блоки по очереди, быстрый проклик. Где в заметках были только ответы, формулировки я достроил сам.</div>
       <div class="block-list" id="blockList"></div>
       <div class="side-actions">
