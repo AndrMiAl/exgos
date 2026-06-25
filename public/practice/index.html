@@ -1000,39 +1000,7 @@
     }
 
     function getBalancedOptionText(question, option, optionIndex, qIndex) {
-      const baseText = getOptionBaseText(option);
-      if (optionIndex === question.correct) {
-        return baseText;
-      }
-
-      const targetLength = getOptionTargetLength(question);
-      if (!targetLength) {
-        return baseText;
-      }
-
-      const correctLength = getOptionBaseText(question.options[question.correct]).length;
-      if (correctLength < 34 || baseText.length <= 18) {
-        return baseText;
-      }
-
-      if (baseText.length >= Math.round(targetLength * 0.78)) {
-        return baseText;
-      }
-
-      if ((qIndex + optionIndex) % 3 === 0) {
-        return baseText;
-      }
-
-      let result = `${baseText}, ${visibleBalanceStarters[(qIndex + optionIndex) % visibleBalanceStarters.length]}`;
-      let tailIndex = qIndex + optionIndex;
-      const visibleTarget = Math.min(targetLength - 6, Math.round(correctLength * 0.9));
-
-      while (result.length < visibleTarget) {
-        result += `, ${visibleBalanceTails[tailIndex % visibleBalanceTails.length]}`;
-        tailIndex += 1;
-      }
-
-      return result;
+      return getOptionBaseText(option);
     }
 
     function equalizeOptionHeights(root) {
