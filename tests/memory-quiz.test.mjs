@@ -76,12 +76,14 @@ async function loadQuizRuntime(filePath) {
   vm.runInContext(`${scriptMatch[1]}
 this.__quizData = quizData
 this.__getBalancedOptionText = getBalancedOptionText
+this.__getOptionBalanceText = typeof getOptionBalanceText === 'function' ? getOptionBalanceText : null
 `, sandbox)
 
   return {
     document,
     quizData: sandbox.__quizData,
     getBalancedOptionText: sandbox.__getBalancedOptionText,
+    getOptionBalanceText: sandbox.__getOptionBalanceText,
   }
 }
 
@@ -116,17 +118,37 @@ test('memory quiz keeps questions 6 and 7 labeled by default', async () => {
   }
 })
 
+test('memory quiz keeps option labels neutral', async () => {
+  const forbiddenPhrases = [
+    /это верный вариант/u,
+    /это неверно/u,
+    /не этот вариант/u,
+  ]
+
+  for (const filePath of quizFiles) {
+    const questionsHtml = await renderQuizHtml(filePath)
+
+    forbiddenPhrases.forEach((pattern) => {
+      assert.doesNotMatch(questionsHtml, pattern, `${filePath} should not inject spoiler wording matching ${pattern}`)
+    })
+  }
+})
+
 test('memory quiz reduces visible answer-length bias for standout options', async () => {
   for (const filePath of quizFiles) {
-    const { quizData, getBalancedOptionText } = await loadQuizRuntime(filePath)
+    const { quizData, getBalancedOptionText, getOptionBalanceText } = await loadQuizRuntime(filePath)
     let checkedQuestions = 0
+
+    assert.equal(typeof getOptionBalanceText, 'function', `${filePath} should expose hidden balance text generation`)
 
     for (const block of quizData) {
       block.questions.forEach((question, qIndex) => {
         const originalLengths = question.options.map((option) => option.length)
-        const renderedLengths = question.options.map((option, optionIndex) =>
-          getBalancedOptionText(question, option, optionIndex, qIndex).length,
-        )
+        const renderedLengths = question.options.map((option, optionIndex) => {
+          const visibleText = getBalancedOptionText(question, option, optionIndex, qIndex)
+          const hiddenBalanceText = getOptionBalanceText(question, option, optionIndex, qIndex)
+          return visibleText.length + hiddenBalanceText.length
+        })
         const correctOriginalLength = originalLengths[question.correct]
         const correctRenderedLength = renderedLengths[question.correct]
         const wrongOriginalLengths = originalLengths.filter((_, optionIndex) => optionIndex !== question.correct)
@@ -176,7 +198,7 @@ test('memory quiz keeps known visual-regression questions balanced by length', a
   ]
 
   for (const filePath of quizFiles) {
-    const { quizData, getBalancedOptionText } = await loadQuizRuntime(filePath)
+    const { quizData, getBalancedOptionText, getOptionBalanceText } = await loadQuizRuntime(filePath)
 
     regressionPatterns.forEach((pattern) => {
       let matched = false
@@ -189,14 +211,21 @@ test('memory quiz keeps known visual-regression questions balanced by length', a
 
         matched = true
         const question = block.questions[questionIndex]
-        const originalLengths = question.options.map((option) => option.length)
-        const renderedLengths = question.options.map((option, optionIndex) =>
-          getBalancedOptionText(question, option, optionIndex, questionIndex).length,
-        )
+        const renderedLengths = question.options.map((option, optionIndex) => {
+          const visibleText = getBalancedOptionText(question, option, optionIndex, questionIndex)
+          const hiddenBalanceText = getOptionBalanceText(question, option, optionIndex, questionIndex)
+          return visibleText.length + hiddenBalanceText.length
+        })
+        const correctRenderedLength = renderedLengths[question.correct]
+        const wrongRenderedLengths = renderedLengths.filter((_, optionIndex) => optionIndex !== question.correct)
 
         assert.ok(
-          getSpread(renderedLengths) < getSpread(originalLengths),
-          `${filePath} should reduce spread for "${question.text}"`,
+          Math.min(...wrongRenderedLengths) <= correctRenderedLength,
+          `${filePath} should keep the correct answer from being the shortest option for "${question.text}"`,
+        )
+        assert.ok(
+          Math.max(...wrongRenderedLengths) >= correctRenderedLength,
+          `${filePath} should keep the correct answer from being the longest option for "${question.text}"`,
         )
         break
       }
