@@ -926,15 +926,6 @@
       return optionExpansionOverrides[option] || option;
     }
 
-    function getMedianLength(lengths) {
-      const sorted = [...lengths].sort((a, b) => a - b);
-      const middleIndex = Math.floor(sorted.length / 2);
-      if (sorted.length % 2 === 0) {
-        return (sorted[middleIndex - 1] + sorted[middleIndex]) / 2;
-      }
-      return sorted[middleIndex];
-    }
-
     function getOptionTargetLength(question) {
       const lengths = question.options.map((item) => getOptionBaseText(item).length);
       const minLength = Math.min(...lengths);
