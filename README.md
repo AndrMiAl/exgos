@@ -1,79 +1,178 @@
-# ГОСы: тренажер тестовых вопросов
+# Тренажёр ГОСов
 
-Скелет приложения на Vue 3, TypeScript, Vite, Pinia, Vue Router и Element Plus. Акцентный цвет задан как `#0156BC`.
+Веб-приложение для подготовки к государственному экзамену: тестовые вопросы, учебные материалы, профили пользователей, история попыток и статистика.
 
-## Запуск
+## Возможности
+
+- прохождение тестовых вопросов по разделам;
+- объяснения и учебные материалы по темам;
+- гостевой режим без регистрации;
+- пользовательские профили;
+- сохранение попыток и прогресса;
+- статистика по вопросам и результатам;
+- импорт банка вопросов из Markdown;
+- отдельный frontend и Node.js API.
+
+## Стек
+
+### Frontend
+
+- Vue 3;
+- TypeScript;
+- Vite;
+- Pinia;
+- Vue Router;
+- Element Plus;
+- ECharts.
+
+### Backend
+
+- Node.js;
+- Express;
+- CORS;
+- JSON-хранилище для профилей, попыток и статистики.
+
+## Быстрый запуск
+
+Требуется Node.js.
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` запускает сразу два процесса:
+Команда `npm run dev` запускает одновременно:
 
-- Node API на `http://127.0.0.1:3001`
-- Vite frontend на `http://127.0.0.1:5173`
+- API: `http://127.0.0.1:3001`;
+- frontend: `http://127.0.0.1:5173`.
 
-Для доступа с других устройств в одной сети нужно запускать frontend/backend на доступном хосте и открывать адрес машины, где запущен сервер.
-
-## Где хранятся данные
-
-Вопросы добавляются в `src/data/questionBank.ts` как массив разделов. Структура уже типизирована:
-
-- `QuestionSection`: раздел, порядок, описание и список вопросов.
-- `ExamQuestion`: текст вопроса, варианты ответа, правильный вариант, объяснение, источники и привязанные материалы.
-- `AnswerOption`: идентификатор варианта, короткая метка и текст ответа.
-
-Материалы добавляются в `src/data/materials.ts` как массив `StudyMaterial`. Материал можно привязать к разделу через `sectionId`.
-
-Зарегистрированные пользователи, профили, попытки и статистика сохраняются на Node-сервере в `server/data/app-db.json`. Файл не коммитится в Git.
-
-В продакшене директория с этим файлом должна быть постоянным хранилищем. На Render обычная файловая система сервиса временная: данные, записанные приложением, могут пропасть после redeploy, restart или spin-down. Для Render нужно подключить Persistent Disk или заменить JSON-файл на внешнюю базу данных.
-
-Гостевой режим сохраняется только в `localStorage` текущего браузера:
-
-- `gos-exam-auth`: текущий профиль и локальные пользователи.
-- `gos-exam-progress`: попытки решения и агрегированная статистика по вопросам.
-
-Для синхронизации между устройствами нужно входить под одним логином на frontend, подключенном к одному и тому же Node API.
-
-## Деплой frontend + backend
-
-Frontend можно держать на Vercel, а Node API на Render.
-
-Для Vercel:
-
-- Build command: `npm run build`
-- Output directory: `dist`
-- Environment variable: `VITE_API_URL=http://171.22.133.140/api`
-
-В репозитории также есть `.env.production`, поэтому обычная production-сборка фронта будет использовать backend на VPS:
+Отдельный запуск:
 
 ```bash
-VITE_API_URL=http://171.22.133.140/api
+npm run dev:client
+npm run dev:server
 ```
 
-Для Render Web Service:
-
-- Build command: `npm install`
-- Start command: `npm run server`
-- Environment variable: `FRONTEND_URL=https://АДРЕС-ФРОНТА-НА-VERCEL.vercel.app`
-- Environment variable: `DATA_DIR=/var/data`
-
-Чтобы аккаунты не пропадали, подключи Render Persistent Disk с mount path `/var/data`. Если диск не подключен, `server/data/app-db.json` будет жить только во временной файловой системе сервиса.
-
-Если используется несколько frontend-доменов, можно указать их через запятую:
+Production-сборка:
 
 ```bash
-FRONTEND_URLS=https://site.vercel.app,https://preview.vercel.app
+npm run build
+npm run server
 ```
 
-## Импорт вопросов из markdown
+## Структура проекта
 
-Вопросы и материалы импортируются из файлов `../тема_*_100_тестовых_вопросов.md`:
+```text
+src/                    frontend-приложение
+src/data/               банк вопросов и учебные материалы
+server/                 Node.js API
+scripts/                служебные скрипты и импорт вопросов
+tests/                  тесты
+ready_solutions/        подготовленные решения и материалы
+public/                 статические файлы
+```
+
+## Данные вопросов
+
+Банк вопросов хранится в:
+
+```text
+src/data/questionBank.ts
+```
+
+Основные типы:
+
+- `QuestionSection` — раздел и его вопросы;
+- `ExamQuestion` — вопрос, варианты, правильный ответ, объяснение и источники;
+- `AnswerOption` — вариант ответа.
+
+Учебные материалы находятся в:
+
+```text
+src/data/materials.ts
+```
+
+## Импорт вопросов
+
+Вопросы и материалы можно перегенерировать из Markdown:
 
 ```bash
 npm run import:questions
 ```
 
-Скрипт лежит в `scripts/import-md-questions.mjs` и перегенерирует `src/data/questionBank.ts` и `src/data/materials.ts`.
+Скрипт:
+
+```text
+scripts/import-md-questions.mjs
+```
+
+## Хранение прогресса
+
+### Гостевой режим
+
+Данные хранятся в `localStorage` браузера:
+
+- `gos-exam-auth`;
+- `gos-exam-progress`.
+
+### Зарегистрированные пользователи
+
+Backend хранит профили, попытки и статистику в:
+
+```text
+server/data/app-db.json
+```
+
+Этот runtime-файл не коммитится в Git.
+
+Для production рекомендуется постоянное хранилище или внешняя база данных.
+
+## Переменные окружения
+
+Пример находится в:
+
+```text
+.env.example
+```
+
+Для frontend может использоваться:
+
+```text
+VITE_API_URL
+```
+
+Для backend:
+
+```text
+FRONTEND_URL
+FRONTEND_URLS
+DATA_DIR
+```
+
+Реальные секреты и runtime-данные в Git добавлять не нужно.
+
+## Деплой
+
+Типовой вариант:
+
+- frontend — Vercel или nginx/VPS;
+- backend — Render или собственный VPS;
+- постоянные данные — persistent disk либо внешняя БД.
+
+Для Vercel:
+
+```text
+Build command: npm run build
+Output directory: dist
+```
+
+Для backend:
+
+```text
+Build command: npm install
+Start command: npm run server
+```
+
+## Состояние репозитория
+
+Репозиторий очищен от IDE-файлов, временных Codex-файлов, логов и технических dump-файлов. В Git остаются только исходники и полезные материалы проекта.

@@ -1,7 +1,15 @@
-node_modules
-dist
-server/data/*.json
-.DS_Store
+
+# IDE / temporary files
+*.dump
 *.local
-__pycache__/
+*.log
 *.py[cod]
+*.tmp
+.DS_Store
+.codex-dev*.log
+.codex-temp/
+.idea/
+__pycache__/
+dist
+node_modules
+server/data/*.json
