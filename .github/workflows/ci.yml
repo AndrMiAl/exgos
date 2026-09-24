@@ -20,5 +20,7 @@ jobs:
           cache: npm
       - name: Установить зависимости
         run: npm ci
+      - name: Запустить тесты
+        run: npm test
       - name: Проверить production-сборку
         run: npm run build
