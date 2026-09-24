@@ -39,6 +39,18 @@
 - CORS;
 - JSON-хранилище для профилей, попыток и статистики.
 
+## Архитектура
+
+```mermaid
+flowchart LR
+    U[Пользователь] --> V[Vue 3 + TypeScript]
+    V --> E[Express API]
+    E --> J[(JSON runtime storage)]
+    V --> L[(localStorage для гостевого режима)]
+```
+
+Frontend отвечает за интерфейс, маршрутизацию и состояние приложения. Express API обслуживает пользовательские профили, попытки и статистику, а гостевой прогресс остаётся локально в браузере.
+
 ## Быстрый запуск
 
 Требуется Node.js.
@@ -66,6 +78,10 @@ Production-сборка:
 npm run build
 npm run server
 ```
+
+## CI
+
+GitHub Actions запускается на каждый push и pull request в `main`: устанавливает зависимости через `npm ci` и проверяет production-сборку командой `npm run build`. Статус виден в badge в начале README.
 
 ## Структура проекта
 
